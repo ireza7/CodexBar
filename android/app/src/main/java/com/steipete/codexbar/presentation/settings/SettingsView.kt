@@ -96,6 +96,22 @@ fun SettingsView(
         }
     }
 
+    // Ordered providers list
+    val orderedProviders = remember {
+        listOf(
+            UsageProvider.OPENAI,
+            UsageProvider.CLAUDE,
+            UsageProvider.CURSOR,
+            UsageProvider.COPILOT,
+            UsageProvider.GEMINI,
+            UsageProvider.CODEX,
+            UsageProvider.OPENROUTER,
+            UsageProvider.DEEPSEEK,
+            UsageProvider.MISTRAL,
+            UsageProvider.PERPLEXITY
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -167,22 +183,6 @@ fun SettingsView(
                     style = CodexBarTypography.labelSmall,
                     color = CodexBarColors.TextTertiary,
                     modifier = Modifier.padding(start = 4.dp, top = 8.dp)
-                )
-            }
-
-            // Ordered providers list
-            val orderedProviders = remember {
-                listOf(
-                    UsageProvider.OPENAI,
-                    UsageProvider.CLAUDE,
-                    UsageProvider.CURSOR,
-                    UsageProvider.COPILOT,
-                    UsageProvider.GEMINI,
-                    UsageProvider.CODEX,
-                    UsageProvider.OPENROUTER,
-                    UsageProvider.DEEPSEEK,
-                    UsageProvider.MISTRAL,
-                    UsageProvider.PERPLEXITY
                 )
             }
 

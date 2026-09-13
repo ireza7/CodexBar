@@ -64,7 +64,6 @@ class EncryptedPreferencesManager(
     private fun createEncryptedPrefs(): SharedPreferences {
         val masterKey = MasterKey.Builder(appContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .setRequestStrongBoxed(false)
             .build()
 
         return EncryptedSharedPreferences.create(
