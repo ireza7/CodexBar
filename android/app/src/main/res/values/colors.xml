@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark Mode Theme Palette -->
+    <color name="codexbar_bg_dark">#121214</color>
+    <color name="codexbar_surface_dark">#1C1C1E</color>
+    <color name="codexbar_surface_variant">#2C2C2E</color>
+    <color name="codexbar_border">#3A3A3C</color>
+    <color name="codexbar_accent">#0A84FF</color>
+
+    <!-- Typography Colors -->
+    <color name="codexbar_text_primary">#FFFFFF</color>
+    <color name="codexbar_text_secondary">#8E8E93</color>
+    <color name="codexbar_text_tertiary">#636366</color>
+
+    <!-- Status & Quota Colors -->
+    <color name="status_green">#30D158</color>
+    <color name="status_yellow">#FFD60A</color>
+    <color name="status_red">#FF453A</color>
+
+    <!-- Provider Brand Accent Colors -->
+    <color name="brand_openai">#0F826E</color>
+    <color name="brand_claude">#CC7C5E</color>
+    <color name="brand_cursor">#00BFA5</color>
+    <color name="brand_copilot">#A855F7</color>
+    <color name="brand_gemini">#AB87EA</color>
+    <color name="brand_codex">#49A3B0</color>
+
+    <!-- Launcher Icon Colors -->
+    <color name="ic_launcher_background">#121214</color>
+</resources>

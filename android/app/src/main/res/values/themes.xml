@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.CodexBar" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:statusBarColor">@color/codexbar_bg_dark</item>
+        <item name="android:navigationBarColor">@color/codexbar_bg_dark</item>
+        <item name="android:windowBackground">@color/codexbar_bg_dark</item>
+        <item name="colorPrimary">@color/codexbar_accent</item>
+        <item name="colorSurface">@color/codexbar_surface_dark</item>
+    </style>
+</resources>
