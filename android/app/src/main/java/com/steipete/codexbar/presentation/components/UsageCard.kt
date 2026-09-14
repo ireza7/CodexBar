@@ -139,6 +139,7 @@ fun UsageCard(
                     onCopyError = onCopyError,
                     onRetry = onRetry
                 )
+            } else {
                 // Antigravity Quota Dashboard: Grouped by Gemini and Claude & GPT
                 // Gemini Models Group
                 Text(
@@ -149,7 +150,7 @@ fun UsageCard(
 
                 snapshot.primary?.let { primaryWindow ->
                     RateWindowMetricRow(
-                        title = "Five Hour Limit Remaining",
+                        title = "Five Hour Limit",
                         window = primaryWindow,
                         brandColor = brandColor,
                         nowEpochMs = now,
@@ -162,7 +163,7 @@ fun UsageCard(
 
                 geminiWeekly?.let { weeklyWindow ->
                     RateWindowMetricRow(
-                        title = "Weekly Limit Remaining",
+                        title = "Weekly Limit",
                         window = weeklyWindow,
                         brandColor = brandColor,
                         nowEpochMs = now,
@@ -185,7 +186,7 @@ fun UsageCard(
                 val claudeFiveHour = snapshot.extraRateWindows.find { it.id == "claude_5h" }?.window
                 claudeFiveHour?.let { fiveHourWindow ->
                     RateWindowMetricRow(
-                        title = "Five Hour Limit Remaining",
+                        title = "Five Hour Limit",
                         window = fiveHourWindow,
                         brandColor = Color(0xFFFF9F0A),
                         nowEpochMs = now,
@@ -198,33 +199,12 @@ fun UsageCard(
 
                 claudeWeekly?.let { weeklyWindow ->
                     RateWindowMetricRow(
-                        title = "Weekly Limit Remaining",
+                        title = "Weekly Limit",
                         window = weeklyWindow,
                         brandColor = Color(0xFFFF9F0A),
                         nowEpochMs = now,
                         showPaceIndicator = false
                     )
-                }
-
-                // Cost & Budget Section
-                snapshot.costSnapshot?.let { cost ->
-                    CostSnapshotRow(
-                        cost = cost,
-                        brandColor = brandColor
-                    )
-                }
-
-                // Credits Section
-                snapshot.credits?.let { credits ->
-                    CreditsSnapshotRow(
-                        creditsRemaining = credits.remaining,
-                        brandColor = brandColor
-                    )
-                }
-
-                // Token Usage Summary
-                snapshot.tokenUsage?.let { tokens ->
-                    TokenUsageRow(tokens = tokens)
                 }
             }
         }
