@@ -145,7 +145,7 @@ object GoogleOAuthManager {
     }
 
     private fun exchangeCodeForToken(code: String): Result<String> {
-        val client = OkHttpClient()
+        val client = ResilientHttpClientFactory.createClient()
         val formBody = FormBody.Builder()
             .add("client_id", CLIENT_ID)
             .add("client_secret", CLIENT_SECRET)
@@ -177,7 +177,7 @@ object GoogleOAuthManager {
      * Refreshes an expired access token using the refresh token.
      */
     fun refreshAccessToken(refreshToken: String): Result<String> {
-        val client = OkHttpClient()
+        val client = ResilientHttpClientFactory.createClient()
         val formBody = FormBody.Builder()
             .add("client_id", CLIENT_ID)
             .add("client_secret", CLIENT_SECRET)

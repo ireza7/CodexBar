@@ -5,6 +5,7 @@ import android.content.Context
 import com.steipete.codexbar.data.local.EncryptedPreferencesManager
 import com.steipete.codexbar.data.local.SettingsRepositoryImpl
 import com.steipete.codexbar.data.repository.UsageRepositoryImpl
+import com.steipete.codexbar.data.remote.ResilientHttpClientFactory
 import com.steipete.codexbar.domain.repository.SecureStorage
 import com.steipete.codexbar.domain.repository.SettingsRepository
 import com.steipete.codexbar.domain.repository.UsageRepository
@@ -15,7 +16,7 @@ import okhttp3.OkHttpClient
  */
 class AppContainer(private val context: Context) {
     val httpClient: OkHttpClient by lazy {
-        OkHttpClient.Builder().build()
+        ResilientHttpClientFactory.createClient()
     }
 
     val secureStorage: SecureStorage by lazy {
