@@ -1,18 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">CodexBar</string>
-
-    <!-- Provider Names -->
-    <string name="provider_codex">Codex</string>
-    <string name="provider_openai">OpenAI</string>
-    <string name="provider_claude">Claude</string>
-    <string name="provider_cursor">Cursor</string>
-    <string name="provider_copilot">GitHub Copilot</string>
-    <string name="provider_gemini">Google Gemini</string>
+    <string name="app_name">Antigravity Quota</string>
 
     <!-- General UI Labels -->
-    <string name="dashboard_title">CodexBar</string>
-    <string name="settings_title">Provider Settings</string>
+    <string name="dashboard_title">Antigravity Quota</string>
+    <string name="settings_title">Antigravity Account</string>
     <string name="refresh">Refresh</string>
     <string name="refreshing">Refreshing&#8230;</string>
     <string name="session_quota">Session Quota</string>

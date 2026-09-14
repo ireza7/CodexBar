@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "CodexBar"
+rootProject.name = "antigravity-quota-widget"
 include(":app")

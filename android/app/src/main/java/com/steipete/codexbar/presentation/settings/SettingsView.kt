@@ -1,5 +1,8 @@
 package com.steipete.codexbar.presentation.settings
 
+import android.content.Context
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -14,13 +17,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
@@ -30,6 +33,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -42,7 +46,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,13 +54,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.steipete.codexbar.domain.model.ProviderDescriptor
 import com.steipete.codexbar.domain.model.UsageProvider
 import com.steipete.codexbar.domain.model.UserSettings
 import com.steipete.codexbar.domain.repository.SecureStorage
@@ -67,10 +70,6 @@ import com.steipete.codexbar.presentation.theme.CodexBarTypography
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Settings screen for configuring AI provider credentials, toggling active providers,
- * selecting adaptive refresh intervals, and customizing pace visualization.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsView(
@@ -83,36 +82,13 @@ fun SettingsView(
         .collectAsStateWithLifecycle(initialValue = UserSettings())
 
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
-    // Store in-memory draft API keys keyed by UsageProvider
-    val apiKeysDraft = remember { mutableStateMapOf<UsageProvider, String>() }
-    val savedConfirmationMap = remember { mutableStateMapOf<UsageProvider, Boolean>() }
+    var tokenDraft by remember { mutableStateOf("") }
+    var isSavedConfirmation by remember { mutableStateOf(false) }
 
-    // Load initial API keys securely
     LaunchedEffect(Unit) {
-        UsageProvider.entries.forEach { provider ->
-            val key = secureStorage.getApiKey(provider) ?: ""
-            apiKeysDraft[provider] = key
-        }
-    }
-
-    // Search query state for filtering providers
-    var searchQuery by remember { mutableStateOf("") }
-
-    // Dynamic providers list: all 69 providers, sorted by active status first, then displayName
-    val allProviders = remember { UsageProvider.entries }
-    val filteredProviders = remember(searchQuery, userSettings.activeProviders) {
-        val query = searchQuery.trim().lowercase()
-        allProviders
-            .filter { provider ->
-                query.isEmpty() ||
-                provider.displayName.lowercase().contains(query) ||
-                provider.id.lowercase().contains(query)
-            }
-            .sortedWith(
-                compareByDescending<UsageProvider> { userSettings.isProviderActive(it) }
-                    .thenBy { it.displayName.lowercase() }
-            )
+        tokenDraft = secureStorage.getApiKey(UsageProvider.ANTIGRAVITY) ?: ""
     }
 
     Scaffold(
@@ -120,7 +96,7 @@ fun SettingsView(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Settings",
+                        text = "Antigravity Quota Settings",
                         style = CodexBarTypography.titleLarge,
                         color = CodexBarColors.TextPrimary
                     )
@@ -151,21 +127,11 @@ fun SettingsView(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // SECTION 1: GENERAL PREFERENCES
-            item {
-                Text(
-                    text = "GENERAL PREFERENCES",
-                    style = CodexBarTypography.labelSmall,
-                    color = CodexBarColors.TextTertiary,
-                    modifier = Modifier.padding(start = 4.dp, top = 8.dp)
-                )
-            }
-
             item {
                 RefreshIntervalCard(
                     currentMinutes = userSettings.refreshIntervalMinutes,
-                    onSelectInterval = { minutes ->
-                        scope.launch { settingsRepository.setRefreshInterval(minutes) }
+                    onSelectInterval = { interval ->
+                        scope.launch { settingsRepository.setRefreshIntervalMinutes(interval) }
                     }
                 )
             }
@@ -179,75 +145,19 @@ fun SettingsView(
                 )
             }
 
-            // SECTION 2: AI PROVIDERS (69 Providers Supported)
+            // Antigravity Google Account & Browser Auth Card
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "AI PROVIDERS (${filteredProviders.size}/${allProviders.size})",
-                        style = CodexBarTypography.labelSmall,
-                        color = CodexBarColors.TextTertiary,
-                        modifier = Modifier.padding(start = 4.dp, top = 8.dp)
-                    )
-                }
-            }
-
-            // Search input field
-            item {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = {
-                        Text(
-                            text = "Search provider (e.g. Grok, Claude, Bedrock)...",
-                            style = CodexBarTypography.bodyMedium,
-                            color = CodexBarColors.TextTertiary
-                        )
-                    },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = CodexBarColors.TextPrimary,
-                        unfocusedTextColor = CodexBarColors.TextPrimary,
-                        focusedContainerColor = CodexBarColors.SurfaceCard,
-                        unfocusedContainerColor = CodexBarColors.SurfaceCard,
-                        focusedBorderColor = CodexBarColors.ProviderCodex,
-                        unfocusedBorderColor = CodexBarColors.CardBorder
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            items(filteredProviders, key = { it.id }) { provider ->
-                val isEnabled = userSettings.isProviderActive(provider)
-                val descriptor = ProviderDescriptor.forProvider(provider)
-                val currentDraftKey = apiKeysDraft[provider] ?: ""
-                val isSaved = savedConfirmationMap[provider] == true
-
-                ProviderSettingsCard(
-                    provider = provider,
-                    descriptor = descriptor,
-                    isEnabled = isEnabled,
-                    apiKey = currentDraftKey,
-                    isSavedConfirmation = isSaved,
-                    onToggleEnabled = { enabled ->
+                AntigravityAccountCard(
+                    context = context,
+                    token = tokenDraft,
+                    isSavedConfirmation = isSavedConfirmation,
+                    onTokenChange = { tokenDraft = it },
+                    onSaveToken = { token ->
                         scope.launch {
-                            settingsRepository.updateProviderEnabled(provider, enabled)
-                        }
-                    },
-                    onApiKeyChange = { newKey ->
-                        apiKeysDraft[provider] = newKey
-                        savedConfirmationMap[provider] = false
-                    },
-                    onSaveApiKey = { key ->
-                        scope.launch {
-                            secureStorage.saveApiKey(provider, key)
-                            savedConfirmationMap[provider] = true
-                            delay(2500)
-                            savedConfirmationMap[provider] = false
+                            secureStorage.saveApiKey(UsageProvider.ANTIGRAVITY, token)
+                            isSavedConfirmation = true
+                            delay(2000)
+                            isSavedConfirmation = false
                         }
                     }
                 )
@@ -261,11 +171,148 @@ fun SettingsView(
 }
 
 @Composable
+private fun AntigravityAccountCard(
+    context: Context,
+    token: String,
+    isSavedConfirmation: Boolean,
+    onTokenChange: (String) -> Unit,
+    onSaveToken: (String) -> Unit
+) {
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = CodexBarColors.SurfaceCard,
+        border = BorderStroke(1.dp, CodexBarColors.CardBorder),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .clip(CircleShape)
+                            .background(CodexBarColors.ProviderGemini)
+                    )
+                    Text(
+                        text = "Antigravity (Google)",
+                        style = CodexBarTypography.headlineMedium,
+                        color = CodexBarColors.TextPrimary
+                    )
+                }
+
+                ConnectionStatusRow(isConfigured = token.isNotBlank())
+            }
+
+            Text(
+                text = "Connect your Google account session to track quota & resets for Gemini, Claude, and GPT models.",
+                style = CodexBarTypography.bodyMedium,
+                color = CodexBarColors.TextSecondary
+            )
+
+            // 1. Browser Login Button
+            OutlinedButton(
+                onClick = {
+                    val customTabsIntent = CustomTabsIntent.Builder()
+                        .setShowTitle(true)
+                        .build()
+                    val authUri = Uri.parse("https://accounts.google.com/o/oauth2/v2/auth?client_id=1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com&redirect_uri=urn:ietf:wg:oauth:2.0:oob&response_type=code&scope=https://www.googleapis.com/auth/cloud-platform%20https://www.googleapis.com/auth/userinfo.email&prompt=select_account")
+                    customTabsIntent.launchUrl(context, authUri)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = CodexBarColors.TextPrimary
+                ),
+                border = BorderStroke(1.dp, CodexBarColors.ProviderGemini),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.OpenInBrowser,
+                    contentDescription = null,
+                    tint = CodexBarColors.ProviderGemini,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text("  Login with Google in Browser", style = CodexBarTypography.labelMedium)
+            }
+
+            Text(
+                text = "Or enter your OAuth Bearer Token / Session JSON / Cookie:",
+                style = CodexBarTypography.labelSmall,
+                color = CodexBarColors.TextTertiary
+            )
+
+            OutlinedTextField(
+                value = token,
+                onValueChange = onTokenChange,
+                label = { Text("Token / Session JSON / SID") },
+                placeholder = { Text("ya29... or JSON token or SID", color = CodexBarColors.TextTertiary) },
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(
+                            imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                            contentDescription = "Toggle Visibility",
+                            tint = CodexBarColors.TextSecondary
+                        )
+                    }
+                },
+                singleLine = false,
+                maxLines = 4,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = CodexBarColors.ProviderGemini,
+                    unfocusedBorderColor = CodexBarColors.CardBorder,
+                    focusedTextColor = CodexBarColors.TextPrimary,
+                    unfocusedTextColor = CodexBarColors.TextPrimary
+                )
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Button(
+                    onClick = { onSaveToken(token) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isSavedConfirmation) CodexBarColors.StatusGreen else CodexBarColors.ProviderGemini,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    if (isSavedConfirmation) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Saved",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(" Saved", style = CodexBarTypography.labelSmall)
+                    } else {
+                        Text("Save & Connect", style = CodexBarTypography.labelSmall)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun RefreshIntervalCard(
     currentMinutes: Int,
     onSelectInterval: (Int) -> Unit
 ) {
-    // Refresh intervals matching AdaptiveRefreshPolicy: 2m, 5m, 15m, 30m
     val intervals = listOf(2, 5, 15, 30)
 
     Surface(
@@ -284,19 +331,19 @@ private fun RefreshIntervalCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Adaptive Refresh Interval",
+                    text = "Refresh Interval",
                     style = CodexBarTypography.bodyLarge,
                     color = CodexBarColors.TextPrimary
                 )
                 Text(
                     text = "${currentMinutes}m",
                     style = CodexBarTypography.labelMedium,
-                    color = CodexBarColors.ProviderCodex,
+                    color = CodexBarColors.ProviderGemini,
                     fontWeight = FontWeight.SemiBold
                 )
             }
             Text(
-                text = "Controls how frequently background probes verify quota consumption.",
+                text = "Controls how often quotas and reset times update in the background.",
                 style = CodexBarTypography.labelMedium,
                 color = CodexBarColors.TextSecondary
             )
@@ -311,12 +358,12 @@ private fun RefreshIntervalCard(
                         onClick = { onSelectInterval(minutes) },
                         label = { Text("${minutes}m") },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = CodexBarColors.ProviderCodex.copy(alpha = 0.25f),
+                            selectedContainerColor = CodexBarColors.ProviderGemini.copy(alpha = 0.25f),
                             selectedLabelColor = Color.White,
                             containerColor = CodexBarColors.SurfaceCardElevated,
                             labelColor = CodexBarColors.TextSecondary
                         ),
-                        border = if (isSelected) BorderStroke(1.dp, CodexBarColors.ProviderCodex) else null
+                        border = if (isSelected) BorderStroke(1.dp, CodexBarColors.ProviderGemini) else null
                     )
                 }
             }
@@ -347,12 +394,12 @@ private fun PaceToggleCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = "Show Workday Pace Indicator",
+                    text = "Show Pace & Warning Indicator",
                     style = CodexBarTypography.bodyLarge,
                     color = CodexBarColors.TextPrimary
                 )
                 Text(
-                    text = "Displays the 3-stripe deficit/reserve notch on quota progress bars.",
+                    text = "Visualizes burn rate and warning markers on progress bars.",
                     style = CodexBarTypography.labelMedium,
                     color = CodexBarColors.TextSecondary
                 )
@@ -362,7 +409,7 @@ private fun PaceToggleCard(
                 onCheckedChange = onToggle,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.White,
-                    checkedTrackColor = CodexBarColors.ProviderCodex,
+                    checkedTrackColor = CodexBarColors.ProviderGemini,
                     uncheckedTrackColor = CodexBarColors.SurfaceCardElevated
                 )
             )
@@ -371,148 +418,11 @@ private fun PaceToggleCard(
 }
 
 @Composable
-private fun ProviderSettingsCard(
-    provider: UsageProvider,
-    descriptor: ProviderDescriptor,
-    isEnabled: Boolean,
-    apiKey: String,
-    isSavedConfirmation: Boolean,
-    onToggleEnabled: (Boolean) -> Unit,
-    onApiKeyChange: (String) -> Unit,
-    onSaveApiKey: (String) -> Unit
-) {
-    var passwordVisible by remember { mutableStateOf(false) }
-    val brandColor = CodexBarColors.colorForProvider(provider)
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = CodexBarColors.SurfaceCard,
-        border = BorderStroke(1.dp, CodexBarColors.CardBorder),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Header Row: Brand Dot + Name + Switch
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(brandColor)
-                    )
-                    Column {
-                        Text(
-                            text = provider.displayName,
-                            style = CodexBarTypography.headlineMedium,
-                            color = CodexBarColors.TextPrimary
-                        )
-                        ConnectionStatusRow(isConfigured = apiKey.isNotBlank())
-                    }
-                }
-
-                Switch(
-                    checked = isEnabled,
-                    onCheckedChange = onToggleEnabled,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = brandColor,
-                        uncheckedTrackColor = CodexBarColors.SurfaceCardElevated
-                    )
-                )
-            }
-
-            // Credential Form (Visible when enabled)
-            AnimatedVisibility(visible = isEnabled) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    val labelText = if (descriptor.requiresApiKey) "API Key / Bearer Token" else "Session Token / Key"
-                    val placeholderText = when (provider) {
-                        UsageProvider.OPENAI -> "sk-proj-..."
-                        UsageProvider.CLAUDE -> "sessionKey / sk-ant-..."
-                        UsageProvider.CURSOR -> "WorkosCursorSessionToken..."
-                        else -> "Enter ${provider.displayName} API Key..."
-                    }
-
-                    OutlinedTextField(
-                        value = apiKey,
-                        onValueChange = onApiKeyChange,
-                        label = { Text(labelText) },
-                        placeholder = { Text(placeholderText, color = CodexBarColors.TextTertiary) },
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(
-                                    imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    contentDescription = "Toggle Visibility",
-                                    tint = CodexBarColors.TextSecondary
-                                )
-                            }
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = brandColor,
-                            unfocusedBorderColor = CodexBarColors.CardBorder,
-                            focusedTextColor = CodexBarColors.TextPrimary,
-                            unfocusedTextColor = CodexBarColors.TextPrimary,
-                            focusedLabelColor = brandColor,
-                            unfocusedLabelColor = CodexBarColors.TextSecondary
-                        )
-                    )
-
-                    // Save Button row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Button(
-                            onClick = { onSaveApiKey(apiKey) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSavedConfirmation) CodexBarColors.StatusGreen else CodexBarColors.SurfaceCardElevated,
-                                contentColor = CodexBarColors.TextPrimary
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            if (isSavedConfirmation) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Saved",
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(" Saved", style = CodexBarTypography.labelSmall)
-                            } else {
-                                Text("Save Key", style = CodexBarTypography.labelSmall)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun ConnectionStatusRow(isConfigured: Boolean) {
     val (color, text) = if (isConfigured) {
-        CodexBarColors.StatusGreen to "Configured"
+        CodexBarColors.StatusGreen to "Connected"
     } else {
-        CodexBarColors.TextTertiary to "Unconfigured"
+        CodexBarColors.TextTertiary to "Not Connected"
     }
 
     Row(

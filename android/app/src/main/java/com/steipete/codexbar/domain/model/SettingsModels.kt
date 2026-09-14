@@ -18,7 +18,7 @@ enum class ThemeMode {
  * @property themeMode The active theme mode (SYSTEM, DARK, LIGHT). Default is DARK matching CodexBar style.
  */
 data class UserSettings(
-    val activeProviders: List<UsageProvider> = emptyList(),
+    val activeProviders: List<UsageProvider> = listOf(UsageProvider.ANTIGRAVITY),
     val refreshIntervalMinutes: Int = DEFAULT_REFRESH_INTERVAL_MINUTES,
     val showPaceIndicator: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.DARK

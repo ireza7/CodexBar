@@ -74,7 +74,7 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "CodexBar",
+                            text = "Antigravity Quota",
                             style = CodexBarTypography.titleLarge,
                             color = CodexBarColors.TextPrimary
                         )

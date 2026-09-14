@@ -65,14 +65,6 @@ object CodexBarColors {
      * Resolves the canonical brand accent [Color] for the specified [UsageProvider].
      */
     fun colorForProvider(provider: UsageProvider): Color {
-        return when (provider) {
-            UsageProvider.OPENAI -> ProviderOpenAI
-            UsageProvider.CLAUDE -> ProviderClaude
-            UsageProvider.CURSOR -> ProviderCursor
-            UsageProvider.COPILOT -> ProviderCopilot
-            UsageProvider.GEMINI -> ProviderGemini
-            UsageProvider.CODEX -> ProviderCodex
-            else -> hexToColor(provider.brandColorHex, ProviderCodex)
-        }
+        return hexToColor(provider.brandColorHex, ProviderGemini)
     }
 }

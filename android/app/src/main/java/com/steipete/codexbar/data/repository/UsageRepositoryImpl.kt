@@ -1,13 +1,6 @@
 package com.steipete.codexbar.data.repository
 
-import com.steipete.codexbar.data.remote.ClaudeUsageFetcher
-import com.steipete.codexbar.data.remote.CodexUsageFetcher
-import com.steipete.codexbar.data.remote.CopilotUsageFetcher
-import com.steipete.codexbar.data.remote.CursorUsageFetcher
-import com.steipete.codexbar.data.remote.GeminiUsageFetcher
-import com.steipete.codexbar.data.remote.GenericApiKeyUsageFetcher
-import com.steipete.codexbar.data.remote.MockProviderFetcher
-import com.steipete.codexbar.data.remote.OpenAIUsageFetcher
+import com.steipete.codexbar.data.remote.AntigravityUsageFetcher
 import com.steipete.codexbar.data.remote.ProviderFetcher
 import com.steipete.codexbar.domain.model.ProviderCredentials
 import com.steipete.codexbar.domain.model.UsageProvider
@@ -24,11 +17,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import okhttp3.OkHttpClient
 
-/**
- * Default implementation of [UsageRepository].
- * Coordinates live and mock provider fetchers, manages thread-safe cached snapshots,
- * and handles reset-time backfilling across refreshes.
- */
 class UsageRepositoryImpl(
     private val fetchers: Map<UsageProvider, ProviderFetcher> = defaultFetchers(),
     initialCache: Map<UsageProvider, UsageSnapshot> = emptyMap()
@@ -54,17 +42,12 @@ class UsageRepositoryImpl(
         provider: UsageProvider,
         credentials: ProviderCredentials
     ): Result<UsageSnapshot> {
-        val fetcher = fetchers[provider]
-            ?: return Result.failure(
-                IllegalArgumentException("No fetcher registered for provider: ${provider.displayName}")
-            )
-
+        val fetcher = fetchers[provider] ?: AntigravityUsageFetcher()
         val previousSnapshot = cacheFlow.value[provider]
         val result = fetcher.fetchUsage(credentials)
 
         return if (result.isSuccess) {
             val fresh = result.getOrThrow()
-            // Backfill reset times if the new snapshot omits them
             val resolved = fresh.backfillingResetTimes(previousSnapshot)
 
             cacheFlow.update { current ->
@@ -73,7 +56,7 @@ class UsageRepositoryImpl(
             Result.success(resolved)
         } else {
             val error = result.exceptionOrNull()
-            val errorMessage = error?.message ?: "Unknown error fetching ${provider.displayName}"
+            val errorMessage = error?.message ?: "Unknown error"
             val errorSnapshot = UsageSnapshot.error(provider, errorMessage, previousSnapshot)
 
             cacheFlow.update { current ->
@@ -95,31 +78,10 @@ class UsageRepositoryImpl(
     }
 
     companion object {
-        /**
-         * Creates a standard live fetcher registry for all supported providers.
-         */
         fun defaultFetchers(httpClient: OkHttpClient = OkHttpClient()): Map<UsageProvider, ProviderFetcher> {
-            val dedicated: Map<UsageProvider, ProviderFetcher> = mapOf(
-                UsageProvider.OPENAI to OpenAIUsageFetcher(httpClient),
-                UsageProvider.CLAUDE to ClaudeUsageFetcher(httpClient),
-                UsageProvider.CURSOR to CursorUsageFetcher(httpClient),
-                UsageProvider.COPILOT to CopilotUsageFetcher(httpClient),
-                UsageProvider.GEMINI to GeminiUsageFetcher(httpClient),
-                UsageProvider.CODEX to CodexUsageFetcher(httpClient),
-                UsageProvider.SYNTHETIC to MockProviderFetcher(UsageProvider.SYNTHETIC)
+            return mapOf(
+                UsageProvider.ANTIGRAVITY to AntigravityUsageFetcher(httpClient)
             )
-
-            // Register all other providers with generic API key fetcher
-            return UsageProvider.entries.associateWith { provider ->
-                dedicated[provider] ?: GenericApiKeyUsageFetcher(provider, httpClient)
-            }
-        }
-
-        /**
-         * Creates a mock fetcher registry producing realistic fixture data for testing and offline development.
-         */
-        fun mockFetchers(): Map<UsageProvider, ProviderFetcher> {
-            return UsageProvider.entries.associateWith { MockProviderFetcher(it) }
         }
     }
 }
