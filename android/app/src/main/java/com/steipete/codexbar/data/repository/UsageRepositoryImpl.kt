@@ -71,12 +71,31 @@ class UsageRepositoryImpl(
                         ?: (if (resolved.secondary?.resetDescription?.contains("Claude") == true) resolved.secondary else null)
                     val claudeWeeklyPct = claudeWeeklyWindow?.remainingPercent?.toInt() ?: 100
 
+                    val gemini5hReset = resolved.primary?.resetsAtEpochMs ?: 0L
+                    val claude5hReset = claude5hWindow?.resetsAtEpochMs ?: 0L
+                    val geminiWeeklyReset = geminiWeeklyWindow?.resetsAtEpochMs ?: 0L
+                    val claudeWeeklyReset = claudeWeeklyWindow?.resetsAtEpochMs ?: 0L
+
                     prefs.edit()
+                        .putInt("gemini_5h_pct", gemini5hPct)
+                        .putInt("gemini_weekly_pct", geminiWeeklyPct)
+                        .putInt("claude_5h_pct", claude5hPct)
+                        .putInt("claude_weekly_pct", claudeWeeklyPct)
                         .putString("gemini_5h_text", "$gemini5hPct%")
                         .putString("gemini_weekly_text", "$geminiWeeklyPct%")
                         .putString("claude_5h_text", "$claude5hPct%")
                         .putString("claude_weekly_text", "$claudeWeeklyPct%")
+                        .putLong("gemini_5h_reset", gemini5hReset)
+                        .putLong("claude_5h_reset", claude5hReset)
+                        .putLong("gemini_weekly_reset", geminiWeeklyReset)
+                        .putLong("claude_weekly_reset", claudeWeeklyReset)
+                        .putLong("last_updated_epoch", System.currentTimeMillis())
                         .apply()
+
+                    // Request Glance widget to update immediately with fresh quota data
+                    try {
+                        com.steipete.codexbar.presentation.widget.AntigravityQuotaWidget().updateAll(ctx)
+                    } catch (_: Throwable) {}
                 } catch (_: Exception) {}
             }
 

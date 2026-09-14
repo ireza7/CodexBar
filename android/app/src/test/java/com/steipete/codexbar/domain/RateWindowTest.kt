@@ -87,4 +87,22 @@ class RateWindowTest {
         val result = current.backfillingResetTime(cached, nowEpochMs = 1000000L)
         assertThat(result.isSyntheticPlaceholder).isTrue()
     }
+
+    @Test
+    fun costSnapshot_remainingPercent_computesAccurately() {
+        val cost = com.steipete.codexbar.domain.model.ProviderCostSnapshot(
+            used = 25.0,
+            limit = 100.0
+        )
+        assertThat(cost.remainingPercent).isEqualTo(75.0)
+    }
+
+    @Test
+    fun costSnapshot_remainingPercent_clampsToZeroWhenExceeded() {
+        val cost = com.steipete.codexbar.domain.model.ProviderCostSnapshot(
+            used = 120.0,
+            limit = 100.0
+        )
+        assertThat(cost.remainingPercent).isEqualTo(0.0)
+    }
 }

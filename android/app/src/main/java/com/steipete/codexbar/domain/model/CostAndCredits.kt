@@ -26,6 +26,9 @@ data class ProviderCostSnapshot(
 
     val remainingAmount: Double
         get() = maxOf(0.0, limit - used)
+
+    val remainingPercent: Double
+        get() = if (limit > 0.0) maxOf(0.0, (1.0 - (used / limit)) * 100.0) else 0.0
 }
 
 /**

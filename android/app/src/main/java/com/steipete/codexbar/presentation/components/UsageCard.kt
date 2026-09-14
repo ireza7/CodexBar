@@ -307,16 +307,22 @@ private fun RateWindowMetricRow(
     nowEpochMs: Long,
     showPaceIndicator: Boolean
 ) {
-    val clampedPercent = window.usedPercent.coerceIn(0.0, 100.0).toFloat()
+    val remainingPercent = window.remainingPercent.coerceIn(0.0, 100.0).toFloat()
     val countdown = formatResetCountdown(window.resetsAtEpochMs, nowEpochMs) ?: window.resetDescription
     val pace = if (showPaceIndicator) UsagePace.calculate(window, nowEpochMs) else null
+
+    val barTint = when {
+        remainingPercent <= 15f -> CodexBarColors.StatusRed
+        remainingPercent <= 30f -> CodexBarColors.StatusAmber
+        else -> brandColor
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // Line 1: Title + Remaining Percentage and Countdown
-        val remainingPct = window.remainingPercent.toInt()
+        val remainingPct = remainingPercent.toInt()
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -335,13 +341,13 @@ private fun RateWindowMetricRow(
             }
         }
 
-        // Line 2: Multi-stage progress bar
+        // Line 2: Multi-stage progress bar (empties from right to left as quota is consumed)
         UsageProgressBar(
-            percent = clampedPercent,
-            tint = brandColor,
-            pacePercent = pace?.targetPercent?.toFloat(),
+            percent = remainingPercent,
+            tint = barTint,
+            pacePercent = pace?.let { (100.0 - it.targetPercent).coerceIn(0.0, 100.0).toFloat() },
             paceOnTop = pace?.willLastToReset ?: true,
-            warningMarkerPercents = listOf(80f)
+            warningMarkerPercents = listOf(20f)
         )
 
         // Line 3: Pace / diagnostic detail text
@@ -373,7 +379,14 @@ private fun NamedRateWindowRow(
     nowEpochMs: Long
 ) {
     val countdown = formatResetCountdown(namedWindow.window.resetsAtEpochMs, nowEpochMs)
-    val clampedPercent = namedWindow.window.usedPercent.coerceIn(0.0, 100.0).toFloat()
+    val remainingPercent = namedWindow.window.remainingPercent.coerceIn(0.0, 100.0).toFloat()
+    val remainingPct = remainingPercent.toInt()
+
+    val barTint = when {
+        remainingPercent <= 15f -> CodexBarColors.StatusRed
+        remainingPercent <= 30f -> CodexBarColors.StatusAmber
+        else -> brandColor
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -385,7 +398,7 @@ private fun NamedRateWindowRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "${namedWindow.title} ${namedWindow.window.usedPercent.toInt()}%",
+                text = "${namedWindow.title}: $remainingPct% remaining",
                 style = CodexBarTypography.bodyMedium,
                 color = CodexBarColors.TextPrimary
             )
@@ -398,8 +411,9 @@ private fun NamedRateWindowRow(
             }
         }
         UsageProgressBar(
-            percent = clampedPercent,
-            tint = brandColor
+            percent = remainingPercent,
+            tint = barTint,
+            warningMarkerPercents = listOf(20f)
         )
     }
 }
@@ -430,9 +444,16 @@ private fun CostSnapshotRow(
             )
         }
         if (cost.limit > 0.0) {
+            val remainingPercent = cost.remainingPercent.toFloat()
+            val barTint = when {
+                remainingPercent <= 15f -> CodexBarColors.StatusRed
+                remainingPercent <= 30f -> CodexBarColors.StatusAmber
+                else -> brandColor
+            }
             UsageProgressBar(
-                percent = cost.usedPercent.toFloat(),
-                tint = brandColor
+                percent = remainingPercent,
+                tint = barTint,
+                warningMarkerPercents = listOf(20f)
             )
         }
     }
