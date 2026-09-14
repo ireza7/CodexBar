@@ -165,14 +165,7 @@ class SettingsRepositoryImpl(
     }
 
     private fun defaultActiveProviders(): List<UsageProvider> {
-        return listOf(
-            UsageProvider.CODEX,
-            UsageProvider.OPENAI,
-            UsageProvider.CLAUDE,
-            UsageProvider.CURSOR,
-            UsageProvider.COPILOT,
-            UsageProvider.GEMINI
-        )
+        return listOf(UsageProvider.ANTIGRAVITY)
     }
 
     private fun defaultSettings(): UserSettings {

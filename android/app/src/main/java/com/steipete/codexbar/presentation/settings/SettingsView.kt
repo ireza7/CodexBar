@@ -131,7 +131,7 @@ fun SettingsView(
                 RefreshIntervalCard(
                     currentMinutes = userSettings.refreshIntervalMinutes,
                     onSelectInterval = { interval ->
-                        scope.launch { settingsRepository.setRefreshIntervalMinutes(interval) }
+                        scope.launch { settingsRepository.setRefreshInterval(interval) }
                     }
                 )
             }
