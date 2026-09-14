@@ -1,17 +1,16 @@
 package com.steipete.codexbar.presentation.widget
 
 import android.content.Context
-import android.content.Intent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.ImageProvider
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
-import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
@@ -23,27 +22,26 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
-import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.steipete.codexbar.MainActivity
+import com.steipete.codexbar.R
 
 class AntigravityQuotaWidget : GlanceAppWidget() {
 
     companion object {
-        private val BG_COLOR = Color(0xFF1E1E22)
-        private val LABEL_COLOR = ColorProvider(Color(0xFFB0B0B5))
-        private val TITLE_COLOR = ColorProvider(Color.White)
-        private val GEMINI_COLOR = ColorProvider(Color(0xFF4285F4))
-        private val CLAUDE_COLOR = ColorProvider(Color(0xFFFF9F0A))
+        private val SOFT_WHITE = ColorProvider(Color(0xFFE0E0E4))
+        private val DIM_LABEL = ColorProvider(Color(0xFF8E8E93))
+        private val GEMINI_ACCENT = ColorProvider(Color(0xFF6EA8FE))
+        private val CLAUDE_ACCENT = ColorProvider(Color(0xFFFFBF60))
 
-        private fun percentColor(pct: Int): ColorProvider = when {
-            pct > 40 -> ColorProvider(Color(0xFF34C759))
-            pct > 15 -> ColorProvider(Color(0xFFFF9F0A))
-            else -> ColorProvider(Color(0xFFFF453A))
+        private fun statusColor(pct: Int): ColorProvider = when {
+            pct > 50 -> ColorProvider(Color(0xFF5ED87A))  // soft green
+            pct > 20 -> ColorProvider(Color(0xFFFFBF60))  // soft amber
+            else -> ColorProvider(Color(0xFFFF6B6B))       // soft red
         }
     }
 
@@ -60,121 +58,145 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
         val cWPct = cW.replace("%", "").toIntOrNull() ?: 50
 
         provideContent {
+            // Outer Neumorphic Raised Card
             Box(
                 modifier = GlanceModifier
                     .fillMaxSize()
-                    .cornerRadius(16.dp)
-                    .background(BG_COLOR)
+                    .background(ImageProvider(R.drawable.widget_bg_raised))
                     .clickable(actionStartActivity<MainActivity>())
-                    .padding(12.dp)
+                    .padding(14.dp)
             ) {
                 Column(
                     modifier = GlanceModifier.fillMaxSize(),
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Title Row
+                    // Title
                     Text(
-                        text = "⚡ Antigravity Quota",
+                        text = "⚡ Antigravity",
                         style = TextStyle(
-                            color = TITLE_COLOR,
-                            fontSize = 13.sp,
+                            color = SOFT_WHITE,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
                     )
 
-                    Spacer(modifier = GlanceModifier.height(8.dp))
+                    Spacer(modifier = GlanceModifier.height(10.dp))
 
-                    // Gemini Row
+                    // Two Neumorphic Inset Cards Side by Side
                     Row(
                         modifier = GlanceModifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = "Gemini",
-                            style = TextStyle(color = GEMINI_COLOR, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        )
-                        Spacer(modifier = GlanceModifier.width(6.dp))
-                        Text(text = "5h:", style = TextStyle(color = LABEL_COLOR, fontSize = 10.sp))
-                        Spacer(modifier = GlanceModifier.width(2.dp))
-                        Text(text = g5h, style = TextStyle(color = percentColor(g5hPct), fontSize = 10.sp, fontWeight = FontWeight.Bold))
+                        // Gemini Card
+                        Box(
+                            modifier = GlanceModifier
+                                .defaultWeight()
+                                .background(ImageProvider(R.drawable.widget_card_inset))
+                                .padding(10.dp)
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Gemini",
+                                    style = TextStyle(
+                                        color = GEMINI_ACCENT,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                                Spacer(modifier = GlanceModifier.height(6.dp))
+
+                                // 5-Hour
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "5h ",
+                                        style = TextStyle(color = DIM_LABEL, fontSize = 10.sp)
+                                    )
+                                    Text(
+                                        text = g5h,
+                                        style = TextStyle(
+                                            color = statusColor(g5hPct),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+
+                                Spacer(modifier = GlanceModifier.height(3.dp))
+
+                                // Weekly
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Wk ",
+                                        style = TextStyle(color = DIM_LABEL, fontSize = 10.sp)
+                                    )
+                                    Text(
+                                        text = gW,
+                                        style = TextStyle(
+                                            color = statusColor(gWPct),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
                         Spacer(modifier = GlanceModifier.width(8.dp))
-                        Text(text = "Wk:", style = TextStyle(color = LABEL_COLOR, fontSize = 10.sp))
-                        Spacer(modifier = GlanceModifier.width(2.dp))
-                        Text(text = gW, style = TextStyle(color = percentColor(gWPct), fontSize = 10.sp, fontWeight = FontWeight.Bold))
+
+                        // Claude & GPT Card
+                        Box(
+                            modifier = GlanceModifier
+                                .defaultWeight()
+                                .background(ImageProvider(R.drawable.widget_card_inset))
+                                .padding(10.dp)
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Claude/GPT",
+                                    style = TextStyle(
+                                        color = CLAUDE_ACCENT,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                                Spacer(modifier = GlanceModifier.height(6.dp))
+
+                                // 5-Hour
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "5h ",
+                                        style = TextStyle(color = DIM_LABEL, fontSize = 10.sp)
+                                    )
+                                    Text(
+                                        text = c5h,
+                                        style = TextStyle(
+                                            color = statusColor(c5hPct),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+
+                                Spacer(modifier = GlanceModifier.height(3.dp))
+
+                                // Weekly
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Wk ",
+                                        style = TextStyle(color = DIM_LABEL, fontSize = 10.sp)
+                                    )
+                                    Text(
+                                        text = cW,
+                                        style = TextStyle(
+                                            color = statusColor(cWPct),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+                            }
+                        }
                     }
-
-                    Spacer(modifier = GlanceModifier.height(3.dp))
-
-                    // Gemini progress bar
-                    WidgetProgressBar(percent = g5hPct, color = Color(0xFF4285F4))
-
-                    Spacer(modifier = GlanceModifier.height(6.dp))
-
-                    // Claude Row
-                    Row(
-                        modifier = GlanceModifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Claude/GPT",
-                            style = TextStyle(color = CLAUDE_COLOR, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        )
-                        Spacer(modifier = GlanceModifier.width(6.dp))
-                        Text(text = "5h:", style = TextStyle(color = LABEL_COLOR, fontSize = 10.sp))
-                        Spacer(modifier = GlanceModifier.width(2.dp))
-                        Text(text = c5h, style = TextStyle(color = percentColor(c5hPct), fontSize = 10.sp, fontWeight = FontWeight.Bold))
-                        Spacer(modifier = GlanceModifier.width(8.dp))
-                        Text(text = "Wk:", style = TextStyle(color = LABEL_COLOR, fontSize = 10.sp))
-                        Spacer(modifier = GlanceModifier.width(2.dp))
-                        Text(text = cW, style = TextStyle(color = percentColor(cWPct), fontSize = 10.sp, fontWeight = FontWeight.Bold))
-                    }
-
-                    Spacer(modifier = GlanceModifier.height(3.dp))
-
-                    // Claude progress bar
-                    WidgetProgressBar(percent = c5hPct, color = Color(0xFFFF9F0A))
-                }
-            }
-        }
-    }
-}
-
-/**
- * Simple Glance-compatible progress bar using layered Box backgrounds.
- */
-@androidx.compose.runtime.Composable
-private fun WidgetProgressBar(percent: Int, color: Color) {
-    val trackColor = Color(0xFF2C2C30)
-    val fillColor = when {
-        percent > 40 -> color
-        percent > 15 -> Color(0xFFFF9F0A)
-        else -> Color(0xFFFF453A)
-    }
-    // Outer track
-    Box(
-        modifier = GlanceModifier
-            .fillMaxWidth()
-            .height(4.dp)
-            .cornerRadius(2.dp)
-            .background(trackColor)
-    ) {
-        // Fill portion - use a fraction of the width
-        // Glance does not support fractional width easily, so we use a fixed approach
-        // by placing a colored box. We approximate using size modifier.
-        val fillFraction = percent.coerceIn(0, 100)
-        if (fillFraction > 0) {
-            Row(modifier = GlanceModifier.fillMaxWidth()) {
-                Box(
-                    modifier = GlanceModifier
-                        .height(4.dp)
-                        .cornerRadius(2.dp)
-                        .background(fillColor)
-                        .defaultWeight()
-                ) {}
-                if (fillFraction < 100) {
-                    // invisible spacer to push fill to the correct ratio
-                    // Glance weight-based layout: fill gets `fillFraction` weight, spacer gets `100-fillFraction`
-                    Spacer(modifier = GlanceModifier.height(4.dp).defaultWeight())
                 }
             }
         }
