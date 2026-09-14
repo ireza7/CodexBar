@@ -27,12 +27,18 @@ import androidx.glance.text.TextStyle
 class AntigravityQuotaWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val prefs = context.getSharedPreferences("antigravity_widget_cache", Context.MODE_PRIVATE)
+        val gemini5h = prefs.getString("gemini_5h_text", "Active") ?: "Active"
+        val geminiWeekly = prefs.getString("gemini_weekly_text", "Active") ?: "Active"
+        val claude5h = prefs.getString("claude_5h_text", "Active") ?: "Active"
+        val claudeWeekly = prefs.getString("claude_weekly_text", "Active") ?: "Active"
+
         provideContent {
             Box(
                 modifier = GlanceModifier
                     .fillMaxSize()
                     .background(Color(0xFF161618))
-                    .padding(14.dp)
+                    .padding(12.dp)
             ) {
                 Column(
                     modifier = GlanceModifier.fillMaxSize(),
@@ -46,55 +52,103 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                             text = "⚡ Antigravity Quota",
                             style = TextStyle(
                                 color = androidx.glance.unit.ColorProvider(Color.White),
-                                fontSize = 14.sp,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         )
                     }
 
-                    Spacer(modifier = GlanceModifier.height(8.dp))
+                    Spacer(modifier = GlanceModifier.height(6.dp))
 
-                    // Gemini Models line
+                    // Gemini Models Group
+                    Text(
+                        text = "Gemini Models",
+                        style = TextStyle(
+                            color = androidx.glance.unit.ColorProvider(Color(0xFF4285F4)),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
                     Row(
                         modifier = GlanceModifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.Horizontal.Start
                     ) {
                         Text(
-                            text = "Gemini Models: ",
+                            text = "5h: ",
                             style = TextStyle(
                                 color = androidx.glance.unit.ColorProvider(Color(0xFFB0B0B5)),
-                                fontSize = 12.sp
+                                fontSize = 10.sp
                             )
                         )
                         Text(
-                            text = "76% remaining",
+                            text = gemini5h,
                             style = TextStyle(
                                 color = androidx.glance.unit.ColorProvider(Color(0xFF34C759)),
-                                fontSize = 12.sp,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                        Spacer(modifier = GlanceModifier.size(8.dp))
+                        Text(
+                            text = "Weekly: ",
+                            style = TextStyle(
+                                color = androidx.glance.unit.ColorProvider(Color(0xFFB0B0B5)),
+                                fontSize = 10.sp
+                            )
+                        )
+                        Text(
+                            text = geminiWeekly,
+                            style = TextStyle(
+                                color = androidx.glance.unit.ColorProvider(Color(0xFF34C759)),
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         )
                     }
 
-                    Spacer(modifier = GlanceModifier.height(4.dp))
+                    Spacer(modifier = GlanceModifier.height(6.dp))
 
-                    // Claude & GPT line
+                    // Claude & GPT Group
+                    Text(
+                        text = "Claude & GPT",
+                        style = TextStyle(
+                            color = androidx.glance.unit.ColorProvider(Color(0xFFFF9F0A)),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
                     Row(
                         modifier = GlanceModifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.Horizontal.Start
                     ) {
                         Text(
-                            text = "Claude & GPT: ",
+                            text = "5h: ",
                             style = TextStyle(
                                 color = androidx.glance.unit.ColorProvider(Color(0xFFB0B0B5)),
-                                fontSize = 12.sp
+                                fontSize = 10.sp
                             )
                         )
                         Text(
-                            text = "55% remaining",
+                            text = claude5h,
                             style = TextStyle(
-                                color = androidx.glance.unit.ColorProvider(Color(0xFFFF9F0A)),
-                                fontSize = 12.sp,
+                                color = androidx.glance.unit.ColorProvider(Color(0xFF34C759)),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                        Spacer(modifier = GlanceModifier.size(8.dp))
+                        Text(
+                            text = "Weekly: ",
+                            style = TextStyle(
+                                color = androidx.glance.unit.ColorProvider(Color(0xFFB0B0B5)),
+                                fontSize = 10.sp
+                            )
+                        )
+                        Text(
+                            text = claudeWeekly,
+                            style = TextStyle(
+                                color = androidx.glance.unit.ColorProvider(Color(0xFF34C759)),
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         )

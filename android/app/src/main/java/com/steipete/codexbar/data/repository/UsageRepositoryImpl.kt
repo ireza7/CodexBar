@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.update
 import okhttp3.OkHttpClient
 
 class UsageRepositoryImpl(
+    private val context: android.content.Context? = null,
     private val fetchers: Map<UsageProvider, ProviderFetcher> = defaultFetchers(),
     initialCache: Map<UsageProvider, UsageSnapshot> = emptyMap()
 ) : UsageRepository {
@@ -53,6 +54,32 @@ class UsageRepositoryImpl(
             cacheFlow.update { current ->
                 current + (provider to resolved)
             }
+
+            // Sync widget cache if context is provided
+            context?.let { ctx ->
+                try {
+                    val prefs = ctx.getSharedPreferences("antigravity_widget_cache", android.content.Context.MODE_PRIVATE)
+                    val gemini5hPct = resolved.primary?.remainingPercent?.toInt() ?: 100
+                    val geminiWeeklyWindow = resolved.extraRateWindows.find { it.id == "gemini_weekly" }?.window
+                        ?: (if (resolved.secondary?.resetDescription?.contains("Claude") == false) resolved.secondary else null)
+                    val geminiWeeklyPct = geminiWeeklyWindow?.remainingPercent?.toInt() ?: 100
+
+                    val claude5hWindow = resolved.extraRateWindows.find { it.id == "claude_5h" }?.window
+                    val claude5hPct = claude5hWindow?.remainingPercent?.toInt() ?: 100
+
+                    val claudeWeeklyWindow = resolved.extraRateWindows.find { it.id == "claude_weekly" }?.window
+                        ?: (if (resolved.secondary?.resetDescription?.contains("Claude") == true) resolved.secondary else null)
+                    val claudeWeeklyPct = claudeWeeklyWindow?.remainingPercent?.toInt() ?: 100
+
+                    prefs.edit()
+                        .putString("gemini_5h_text", "$gemini5hPct%")
+                        .putString("gemini_weekly_text", "$geminiWeeklyPct%")
+                        .putString("claude_5h_text", "$claude5hPct%")
+                        .putString("claude_weekly_text", "$claudeWeeklyPct%")
+                        .apply()
+                } catch (_: Exception) {}
+            }
+
             Result.success(resolved)
         } else {
             val error = result.exceptionOrNull()

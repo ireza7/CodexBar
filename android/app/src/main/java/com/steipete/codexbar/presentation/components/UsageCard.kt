@@ -139,35 +139,70 @@ fun UsageCard(
                     onCopyError = onCopyError,
                     onRetry = onRetry
                 )
-            } else {
-                // Primary Metric (Session Quota)
+                // Antigravity Quota Dashboard: Grouped by Gemini and Claude & GPT
+                // Gemini Models Group
+                Text(
+                    text = "Gemini Models",
+                    style = CodexBarTypography.headlineMedium,
+                    color = CodexBarColors.TextPrimary
+                )
+
                 snapshot.primary?.let { primaryWindow ->
                     RateWindowMetricRow(
-                        title = descriptor?.defaultSessionLabel ?: "Session",
+                        title = "Five Hour Limit Remaining",
                         window = primaryWindow,
                         brandColor = brandColor,
                         nowEpochMs = now,
-                        showPaceIndicator = true
+                        showPaceIndicator = false
                     )
                 }
 
-                // Secondary Metric (Weekly Quota)
-                snapshot.secondary?.let { secondaryWindow ->
+                val geminiWeekly = snapshot.extraRateWindows.find { it.id == "gemini_weekly" }?.window
+                    ?: (if (snapshot.secondary?.resetDescription?.contains("Claude") == false) snapshot.secondary else null)
+
+                geminiWeekly?.let { weeklyWindow ->
                     RateWindowMetricRow(
-                        title = descriptor?.defaultWeeklyLabel ?: "Weekly",
-                        window = secondaryWindow,
+                        title = "Weekly Limit Remaining",
+                        window = weeklyWindow,
                         brandColor = brandColor,
                         nowEpochMs = now,
-                        showPaceIndicator = true
+                        showPaceIndicator = false
                     )
                 }
 
-                // Extra Named Rate Windows (e.g. Sonnet 3.5, Opus 3.7)
-                for (extra in snapshot.extraRateWindows) {
-                    NamedRateWindowRow(
-                        namedWindow = extra,
-                        brandColor = brandColor,
-                        nowEpochMs = now
+                HorizontalDivider(
+                    color = CodexBarColors.Divider,
+                    thickness = 1.dp
+                )
+
+                // Claude and GPT models Group
+                Text(
+                    text = "Claude and GPT models",
+                    style = CodexBarTypography.headlineMedium,
+                    color = CodexBarColors.TextPrimary
+                )
+
+                val claudeFiveHour = snapshot.extraRateWindows.find { it.id == "claude_5h" }?.window
+                claudeFiveHour?.let { fiveHourWindow ->
+                    RateWindowMetricRow(
+                        title = "Five Hour Limit Remaining",
+                        window = fiveHourWindow,
+                        brandColor = Color(0xFFFF9F0A),
+                        nowEpochMs = now,
+                        showPaceIndicator = false
+                    )
+                }
+
+                val claudeWeekly = snapshot.extraRateWindows.find { it.id == "claude_weekly" }?.window
+                    ?: (if (snapshot.secondary?.resetDescription?.contains("Claude") == true) snapshot.secondary else null)
+
+                claudeWeekly?.let { weeklyWindow ->
+                    RateWindowMetricRow(
+                        title = "Weekly Limit Remaining",
+                        window = weeklyWindow,
+                        brandColor = Color(0xFFFF9F0A),
+                        nowEpochMs = now,
+                        showPaceIndicator = false
                     )
                 }
 
@@ -300,14 +335,15 @@ private fun RateWindowMetricRow(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Line 1: Title + Percentage and Countdown
+        // Line 1: Title + Remaining Percentage and Countdown
+        val remainingPct = window.remainingPercent.toInt()
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "$title ${window.usedPercent.toInt()}% used",
+                text = "$title: $remainingPct% remaining",
                 style = CodexBarTypography.bodyLarge
             )
             if (countdown != null) {

@@ -29,6 +29,7 @@ class AppContainer(private val context: Context) {
 
     val usageRepository: UsageRepository by lazy {
         UsageRepositoryImpl(
+            context = context,
             fetchers = UsageRepositoryImpl.defaultFetchers(httpClient)
         )
     }

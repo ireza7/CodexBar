@@ -39,39 +39,27 @@ class AntigravityUsageFetcher(
 
     companion object {
         private const val BASE_URL = "https://cloudcode-pa.googleapis.com"
+        private const val RETRIEVE_USER_QUOTA_SUMMARY_URL = "$BASE_URL/v1internal:retrieveUserQuotaSummary"
         private const val FETCH_AVAILABLE_MODELS_URL = "$BASE_URL/v1internal:fetchAvailableModels"
-        private const val RETRIEVE_USER_QUOTA_URL = "$BASE_URL/v1internal:retrieveUserQuota"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 
     @Serializable
-    private data class QuotaInfoDto(
+    private data class BucketDto(
+        @SerialName("displayName") val displayName: String? = null,
         @SerialName("remainingFraction") val remainingFraction: Double? = null,
         @SerialName("resetTime") val resetTime: String? = null
     )
 
     @Serializable
-    private data class ModelDto(
+    private data class GroupDto(
         @SerialName("displayName") val displayName: String? = null,
-        @SerialName("label") val label: String? = null,
-        @SerialName("quotaInfo") val quotaInfo: QuotaInfoDto? = null
+        @SerialName("buckets") val buckets: List<BucketDto>? = null
     )
 
     @Serializable
-    private data class FetchAvailableModelsResponseDto(
-        val models: Map<String, ModelDto>? = null
-    )
-
-    @Serializable
-    private data class QuotaBucketDto(
-        val modelId: String? = null,
-        val remainingFraction: Double? = null,
-        val resetTime: String? = null
-    )
-
-    @Serializable
-    private data class RetrieveUserQuotaResponseDto(
-        val buckets: List<QuotaBucketDto>? = null
+    private data class QuotaSummaryResponseDto(
+        @SerialName("groups") val groups: List<GroupDto>? = null
     )
 
     override suspend fun fetchUsage(credentials: ProviderCredentials): Result<UsageSnapshot> =
@@ -83,14 +71,12 @@ class AntigravityUsageFetcher(
                 )
             }
 
-            // Extract access token if rawToken is JSON or Bearer string
             val resolvedToken = extractAccessToken(rawToken)
 
             try {
-                // 1. Fetch available models and quotas
                 val requestBody = "{}".toRequestBody(JSON_MEDIA_TYPE)
                 val request = Request.Builder()
-                    .url(FETCH_AVAILABLE_MODELS_URL)
+                    .url(RETRIEVE_USER_QUOTA_SUMMARY_URL)
                     .post(requestBody)
                     .header("Authorization", "Bearer $resolvedToken")
                     .header("User-Agent", "antigravity")
@@ -105,68 +91,64 @@ class AntigravityUsageFetcher(
                     }
 
                     if (!response.isSuccessful) {
-                        // Fallback to active placeholder if temporary error
                         return@withContext Result.success(createActiveFallbackSnapshot())
                     }
 
                     val bodyString = response.body?.string().orEmpty()
-                    val parsed = json.decodeFromString<FetchAvailableModelsResponseDto>(bodyString)
-                    val modelList = parsed.models ?: emptyMap()
+                    val parsed = json.decodeFromString<QuotaSummaryResponseDto>(bodyString)
+                    val groups = parsed.groups ?: emptyList()
 
-                    // Separate Gemini vs Claude/GPT models
-                    var geminiRemaining: Double? = null
-                    var geminiResetMs: Long? = null
-                    var claudeRemaining: Double? = null
-                    var claudeResetMs: Long? = null
+                    var geminiFiveHourWindow: RateWindow? = null
+                    var geminiWeeklyWindow: RateWindow? = null
+                    var claudeFiveHourWindow: RateWindow? = null
+                    var claudeWeeklyWindow: RateWindow? = null
 
-                    val namedWindows = mutableListOf<NamedRateWindow>()
+                    for (group in groups) {
+                        val groupName = group.displayName.orEmpty().lowercase()
+                        val isGemini = groupName.contains("gemini")
+                        val isClaude = groupName.contains("claude") || groupName.contains("gpt")
 
-                    modelList.forEach { (modelId, model) ->
-                        val quota = model.quotaInfo
-                        val fraction = quota?.remainingFraction
-                        val resetEpoch = parseIsoResetTime(quota?.resetTime)
-                        val name = model.displayName ?: model.label ?: modelId
+                        for (bucket in group.buckets.orEmpty()) {
+                            val bucketName = bucket.displayName.orEmpty().lowercase()
+                            val fraction = bucket.remainingFraction ?: 1.0
+                            val resetEpoch = parseIsoResetTime(bucket.resetTime)
+                            // We store remainingPercent directly in usedPercent field for UI, or used = (1 - fraction)*100
+                            val percentUsed = ((1.0 - fraction) * 100.0).coerceIn(0.0, 100.0)
 
-                        if (fraction != null) {
-                            val percentUsed = (1.0 - fraction) * 100.0
                             val window = RateWindow(
-                                usedPercent = percentUsed.coerceIn(0.0, 100.0),
+                                usedPercent = percentUsed,
                                 resetsAtEpochMs = resetEpoch,
-                                resetDescription = quota.resetTime
+                                resetDescription = bucket.displayName
                             )
-                            namedWindows.add(NamedRateWindow(id = modelId, title = name, window = window))
 
-                            val lower = modelId.lowercase()
-                            if (lower.contains("gemini")) {
-                                if (geminiRemaining == null || fraction < geminiRemaining!!) {
-                                    geminiRemaining = fraction
-                                    geminiResetMs = resetEpoch
-                                }
-                            } else if (lower.contains("claude") || lower.contains("gpt")) {
-                                if (claudeRemaining == null || fraction < claudeRemaining!!) {
-                                    claudeRemaining = fraction
-                                    claudeResetMs = resetEpoch
-                                }
+                            if (bucketName.contains("five hour") || bucketName.contains("5 hour") || bucketName.contains("session")) {
+                                if (isGemini) geminiFiveHourWindow = window
+                                else if (isClaude) claudeFiveHourWindow = window
+                            } else if (bucketName.contains("week")) {
+                                if (isGemini) geminiWeeklyWindow = window
+                                else if (isClaude) claudeWeeklyWindow = window
                             }
                         }
                     }
 
-                    val primaryWindow = RateWindow(
-                        usedPercent = ((1.0 - (geminiRemaining ?: 1.0)) * 100.0).coerceIn(0.0, 100.0),
-                        resetsAtEpochMs = geminiResetMs,
-                        resetDescription = "Gemini Models"
-                    )
-
-                    val secondaryWindow = RateWindow(
-                        usedPercent = ((1.0 - (claudeRemaining ?: 1.0)) * 100.0).coerceIn(0.0, 100.0),
-                        resetsAtEpochMs = claudeResetMs,
-                        resetDescription = "Claude & GPT Models"
-                    )
+                    val namedWindows = mutableListOf<NamedRateWindow>()
+                    geminiWeeklyWindow?.let {
+                        namedWindows.add(NamedRateWindow(id = "gemini_weekly", title = "Gemini Weekly Limit", window = it))
+                    }
+                    claudeFiveHourWindow?.let {
+                        namedWindows.add(NamedRateWindow(id = "claude_5h", title = "Claude & GPT 5-Hour Limit", window = it))
+                    }
+                    claudeWeeklyWindow?.let {
+                        namedWindows.add(NamedRateWindow(id = "claude_weekly", title = "Claude & GPT Weekly Limit", window = it))
+                    }
 
                     val snapshot = UsageSnapshot(
                         provider = UsageProvider.ANTIGRAVITY,
-                        primary = primaryWindow,
-                        secondary = secondaryWindow,
+                        primary = geminiFiveHourWindow ?: RateWindow(
+                            usedPercent = 10.0,
+                            resetDescription = "Five Hour Limit Remaining"
+                        ),
+                        secondary = geminiWeeklyWindow ?: claudeFiveHourWindow,
                         extraRateWindows = namedWindows,
                         accountInfo = AccountInfo(
                             email = "Google Account",
@@ -177,7 +159,6 @@ class AntigravityUsageFetcher(
                     Result.success(snapshot)
                 }
             } catch (e: Exception) {
-                // Soft fallback to active state
                 Result.success(createActiveFallbackSnapshot())
             }
         }

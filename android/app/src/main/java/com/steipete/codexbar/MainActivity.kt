@@ -60,6 +60,10 @@ fun CodexBarNavHost(
     var currentScreen by rememberSaveable { mutableStateOf(AppScreen.DASHBOARD) }
     val uiState by dashboardViewModel.uiState.collectAsStateWithLifecycle()
 
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        dashboardViewModel.refreshSelected()
+    }
+
     when (currentScreen) {
         AppScreen.DASHBOARD -> {
             DashboardScreen(
