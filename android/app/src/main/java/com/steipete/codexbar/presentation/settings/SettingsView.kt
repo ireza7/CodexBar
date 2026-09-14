@@ -28,7 +28,9 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import com.steipete.codexbar.data.remote.GoogleOAuthManager
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -223,29 +225,59 @@ private fun AntigravityAccountCard(
                 color = CodexBarColors.TextSecondary
             )
 
+            var isLoggingIn by remember { mutableStateOf(false) }
+            var loginError by remember { mutableStateOf<String?>(null) }
+            val coroutineScope = rememberCoroutineScope()
+
             // 1. Browser Login Button
             OutlinedButton(
                 onClick = {
-                    val customTabsIntent = CustomTabsIntent.Builder()
-                        .setShowTitle(true)
-                        .build()
-                    val authUri = Uri.parse("https://accounts.google.com/o/oauth2/v2/auth?client_id=1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com&redirect_uri=urn:ietf:wg:oauth:2.0:oob&response_type=code&scope=https://www.googleapis.com/auth/cloud-platform%20https://www.googleapis.com/auth/userinfo.email&prompt=select_account")
-                    customTabsIntent.launchUrl(context, authUri)
+                    if (isLoggingIn) return@OutlinedButton
+                    isLoggingIn = true
+                    loginError = null
+                    coroutineScope.launch {
+                        val result = GoogleOAuthManager.loginWithBrowser(context)
+                        isLoggingIn = false
+                        result.onSuccess { sessionJson ->
+                            onTokenChange(sessionJson)
+                            onSaveToken(sessionJson)
+                        }.onFailure { err ->
+                            loginError = err.message ?: "Login cancelled or failed"
+                        }
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = CodexBarColors.TextPrimary
                 ),
                 border = BorderStroke(1.dp, CodexBarColors.ProviderGemini),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(8.dp),
+                enabled = !isLoggingIn
             ) {
-                Icon(
-                    imageVector = Icons.Default.OpenInBrowser,
-                    contentDescription = null,
-                    tint = CodexBarColors.ProviderGemini,
-                    modifier = Modifier.size(18.dp)
+                if (isLoggingIn) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = CodexBarColors.ProviderGemini
+                    )
+                    Text("  Waiting for Google Login...", style = CodexBarTypography.labelMedium)
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.OpenInBrowser,
+                        contentDescription = null,
+                        tint = CodexBarColors.ProviderGemini,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text("  Login with Google in Browser", style = CodexBarTypography.labelMedium)
+                }
+            }
+
+            if (loginError != null) {
+                Text(
+                    text = "⚠ " + loginError!!,
+                    style = CodexBarTypography.labelSmall,
+                    color = CodexBarColors.StatusRed
                 )
-                Text("  Login with Google in Browser", style = CodexBarTypography.labelMedium)
             }
 
             Text(

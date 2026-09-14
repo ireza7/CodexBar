@@ -15,6 +15,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
@@ -184,16 +185,19 @@ class AntigravityUsageFetcher(
     private fun extractAccessToken(raw: String): String {
         if (!raw.startsWith("{")) return raw.removePrefix("Bearer ").trim()
         return try {
-            val jsonMap = json.parseToJsonElement(raw)
-            val tokenObj = jsonMap.toString()
-            if (tokenObj.contains("access_token")) {
-                val regex = "\"access_token\"\\s*:\\s*\"([^\"]+)\"".toRegex()
-                regex.find(tokenObj)?.groupValues?.get(1) ?: raw
+            val json = JSONObject(raw)
+            if (json.has("access_token")) {
+                json.getString("access_token")
+            } else if (json.has("token")) {
+                val inner = json.getJSONObject("token")
+                inner.optString("access_token", raw)
             } else {
-                raw
+                val regex = "\"access_token\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+                regex.find(raw)?.groupValues?.get(1) ?: raw
             }
         } catch (_: Exception) {
-            raw
+            val regex = "\"access_token\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+            regex.find(raw)?.groupValues?.get(1) ?: raw
         }
     }
 
