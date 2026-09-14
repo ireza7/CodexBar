@@ -5,6 +5,7 @@ import com.steipete.codexbar.data.remote.CodexUsageFetcher
 import com.steipete.codexbar.data.remote.CopilotUsageFetcher
 import com.steipete.codexbar.data.remote.CursorUsageFetcher
 import com.steipete.codexbar.data.remote.GeminiUsageFetcher
+import com.steipete.codexbar.data.remote.GenericApiKeyUsageFetcher
 import com.steipete.codexbar.data.remote.MockProviderFetcher
 import com.steipete.codexbar.data.remote.OpenAIUsageFetcher
 import com.steipete.codexbar.data.remote.ProviderFetcher

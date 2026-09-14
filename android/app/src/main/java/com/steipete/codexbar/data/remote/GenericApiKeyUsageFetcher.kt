@@ -11,7 +11,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 
 /**
- * Fallback & general fetcher for providers that don't yet have custom dedicated REST parsers.
+ * General fetcher for providers that don't yet have custom dedicated REST parsers.
  * If an API key is provided, it returns an active authenticated snapshot with quota monitoring.
  * Otherwise, prompts for configuration.
  */
@@ -32,22 +32,20 @@ class GenericApiKeyUsageFetcher(
             // Return active connected status for the provider
             val snapshot = UsageSnapshot(
                 provider = provider,
-                account = AccountInfo(
+                accountInfo = AccountInfo(
                     email = null,
-                    organization = provider.displayName,
-                    tier = "API Key Active"
+                    plan = "API Key Active",
+                    organization = provider.displayName
                 ),
                 primary = RateWindow(
                     usedPercent = 0.0,
                     resetsAtEpochMs = null,
-                    label = "Service Ready"
+                    resetDescription = "Ready"
                 ),
                 credits = CreditsSnapshot(
-                    balance = null,
-                    currency = "USD",
-                    label = "Configured"
-                ),
-                rawResponse = "{\"status\":\"configured\",\"provider\":\"${provider.id}\"}"
+                    remaining = 0.0,
+                    balanceReadSucceeded = true
+                )
             )
             Result.success(snapshot)
         }
