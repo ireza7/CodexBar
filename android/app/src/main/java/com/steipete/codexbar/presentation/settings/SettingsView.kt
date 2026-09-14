@@ -96,20 +96,23 @@ fun SettingsView(
         }
     }
 
-    // Ordered providers list
-    val orderedProviders = remember {
-        listOf(
-            UsageProvider.OPENAI,
-            UsageProvider.CLAUDE,
-            UsageProvider.CURSOR,
-            UsageProvider.COPILOT,
-            UsageProvider.GEMINI,
-            UsageProvider.CODEX,
-            UsageProvider.OPENROUTER,
-            UsageProvider.DEEPSEEK,
-            UsageProvider.MISTRAL,
-            UsageProvider.PERPLEXITY
-        )
+    // Search query state for filtering providers
+    var searchQuery by remember { mutableStateOf("") }
+
+    // Dynamic providers list: all 69 providers, sorted by active status first, then displayName
+    val allProviders = remember { UsageProvider.entries }
+    val filteredProviders = remember(searchQuery, userSettings.activeProviders) {
+        val query = searchQuery.trim().lowercase()
+        allProviders
+            .filter { provider ->
+                query.isEmpty() ||
+                provider.displayName.lowercase().contains(query) ||
+                provider.id.lowercase().contains(query)
+            }
+            .sortedWith(
+                compareByDescending<UsageProvider> { userSettings.isProviderActive(it) }
+                    .thenBy { it.displayName.lowercase() }
+            )
     }
 
     Scaffold(
@@ -176,17 +179,49 @@ fun SettingsView(
                 )
             }
 
-            // SECTION 2: AI PROVIDERS
+            // SECTION 2: AI PROVIDERS (69 Providers Supported)
             item {
-                Text(
-                    text = "AI PROVIDERS",
-                    style = CodexBarTypography.labelSmall,
-                    color = CodexBarColors.TextTertiary,
-                    modifier = Modifier.padding(start = 4.dp, top = 8.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "AI PROVIDERS (${filteredProviders.size}/${allProviders.size})",
+                        style = CodexBarTypography.labelSmall,
+                        color = CodexBarColors.TextTertiary,
+                        modifier = Modifier.padding(start = 4.dp, top = 8.dp)
+                    )
+                }
+            }
+
+            // Search input field
+            item {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = {
+                        Text(
+                            text = "Search provider (e.g. Grok, Claude, Bedrock)...",
+                            style = CodexBarTypography.bodyMedium,
+                            color = CodexBarColors.TextTertiary
+                        )
+                    },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = CodexBarColors.TextPrimary,
+                        unfocusedTextColor = CodexBarColors.TextPrimary,
+                        focusedContainerColor = CodexBarColors.SurfaceCard,
+                        unfocusedContainerColor = CodexBarColors.SurfaceCard,
+                        focusedBorderColor = CodexBarColors.ProviderCodex,
+                        unfocusedBorderColor = CodexBarColors.CardBorder
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
-            items(orderedProviders, key = { it.id }) { provider ->
+            items(filteredProviders, key = { it.id }) { provider ->
                 val isEnabled = userSettings.isProviderActive(provider)
                 val descriptor = ProviderDescriptor.forProvider(provider)
                 val currentDraftKey = apiKeysDraft[provider] ?: ""

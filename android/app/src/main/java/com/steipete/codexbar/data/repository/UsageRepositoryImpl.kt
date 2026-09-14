@@ -98,7 +98,7 @@ class UsageRepositoryImpl(
          * Creates a standard live fetcher registry for all supported providers.
          */
         fun defaultFetchers(httpClient: OkHttpClient = OkHttpClient()): Map<UsageProvider, ProviderFetcher> {
-            return mapOf(
+            val dedicated: Map<UsageProvider, ProviderFetcher> = mapOf(
                 UsageProvider.OPENAI to OpenAIUsageFetcher(httpClient),
                 UsageProvider.CLAUDE to ClaudeUsageFetcher(httpClient),
                 UsageProvider.CURSOR to CursorUsageFetcher(httpClient),
@@ -107,6 +107,11 @@ class UsageRepositoryImpl(
                 UsageProvider.CODEX to CodexUsageFetcher(httpClient),
                 UsageProvider.SYNTHETIC to MockProviderFetcher(UsageProvider.SYNTHETIC)
             )
+
+            // Register all other providers with generic API key fetcher
+            return UsageProvider.entries.associateWith { provider ->
+                dedicated[provider] ?: GenericApiKeyUsageFetcher(provider, httpClient)
+            }
         }
 
         /**
