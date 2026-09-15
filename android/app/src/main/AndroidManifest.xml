@@ -27,6 +27,15 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".presentation.widget.AntigravityWidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@style/Theme.CodexBar">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".presentation.widget.AntigravityQuotaWidgetReceiver"
             android:exported="true"

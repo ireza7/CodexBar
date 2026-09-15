@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Neumorphic embossed pill chip for account indicator & model badges -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="14dp" />
+            <solid android:color="#0A0B10" />
+        </shape>
+    </item>
+    <item
+        android:left="0dp"
+        android:top="0dp"
+        android:right="0.8dp"
+        android:bottom="0.8dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="14dp" />
+            <stroke
+                android:width="0.8dp"
+                android:color="#32384A" />
+            <solid android:color="#1D202B" />
+        </shape>
+    </item>
+    <item
+        android:left="0.8dp"
+        android:top="0.8dp"
+        android:right="1dp"
+        android:bottom="1dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="13dp" />
+            <gradient
+                android:angle="135"
+                android:startColor="#252936"
+                android:endColor="#1B1D26"
+                android:type="linear" />
+        </shape>
+    </item>
+</layer-list>

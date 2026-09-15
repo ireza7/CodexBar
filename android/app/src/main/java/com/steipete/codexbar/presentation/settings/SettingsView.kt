@@ -180,7 +180,7 @@ fun SettingsView(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = "CodexBar Android v1.0.3 (Build 3)",
+                            text = "CodexBar Android v1.0.4 (Build 4)",
                             style = CodexBarTypography.labelSmall,
                             color = CodexBarColors.TextSecondary
                         )

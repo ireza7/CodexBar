@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Neumorphic tactile raised button -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="10dp" />
+            <solid android:color="#0B0C11" />
+        </shape>
+    </item>
+    <item
+        android:left="0dp"
+        android:top="0dp"
+        android:right="1dp"
+        android:bottom="1dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="10dp" />
+            <stroke
+                android:width="0.8dp"
+                android:color="#363E52" />
+            <solid android:color="#222532" />
+        </shape>
+    </item>
+    <item
+        android:left="0.8dp"
+        android:top="0.8dp"
+        android:right="1.2dp"
+        android:bottom="1.2dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="9dp" />
+            <gradient
+                android:angle="135"
+                android:startColor="#2A2E3E"
+                android:endColor="#1E202B"
+                android:type="linear" />
+        </shape>
+    </item>
+</layer-list>

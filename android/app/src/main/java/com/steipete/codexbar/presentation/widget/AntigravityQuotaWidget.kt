@@ -1,6 +1,8 @@
 package com.steipete.codexbar.presentation.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.content.Intent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -13,6 +15,7 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.LinearProgressIndicator
 import androidx.glance.appwidget.SizeMode
@@ -25,6 +28,7 @@ import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxHeight
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
@@ -37,6 +41,7 @@ import androidx.glance.unit.ColorProvider
 import com.steipete.codexbar.CodexBarApp
 import com.steipete.codexbar.MainActivity
 import com.steipete.codexbar.R
+import com.steipete.codexbar.domain.model.AntigravityAccount
 import com.steipete.codexbar.domain.model.ProviderCredentials
 import com.steipete.codexbar.domain.model.UsageProvider
 import java.time.Instant
@@ -45,24 +50,36 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+/**
+ * Modern Neumorphic Android Widget for Antigravity & AI Quotas.
+ * Features:
+ * - Dedicated tailored layouts for 5 distinct size categories (Compact Mini, Wide Bar, 2x2 Square, Tall Vertical, Expanded Dashboard).
+ * - Multi-account support with initial configuration selector and interactive in-widget account cycling.
+ * - Neumorphism Soft UI aesthetics (extruded outer cards, sunken carved modules, grooved progress tracks, tactile embossed controls).
+ * - High-density information design with zero awkward empty spaces.
+ */
 class AntigravityQuotaWidget : GlanceAppWidget() {
 
     companion object {
-        private val COMPACT_MINI = DpSize(110.dp, 40.dp)       // 2x1 slim
-        private val WIDE_BAR = DpSize(210.dp, 40.dp)           // 4x1 wide
-        private val SQUARE_TILE = DpSize(120.dp, 100.dp)       // 2x2 square (Primary screenshot style)
-        private val EXPANDED_DASHBOARD = DpSize(220.dp, 100.dp)// 4x2 full
+        // Size breakpoints for responsive layouts
+        private val SIZE_MINI = DpSize(100.dp, 50.dp)          // 1x1 / small 2x1
+        private val SIZE_WIDE_BAR = DpSize(200.dp, 55.dp)      // 3x1 / 4x1 wide bar
+        private val SIZE_SQUARE_2X2 = DpSize(130.dp, 105.dp)   // 2x2 square tile
+        private val SIZE_TALL_VERTICAL = DpSize(130.dp, 180.dp)// 2x3 / 2x4 tall vertical
+        private val SIZE_EXPANDED = DpSize(230.dp, 110.dp)     // 4x2+ expanded dashboard
 
-        private val SOFT_WHITE = ColorProvider(Color(0xFFEAEAEE))
-        private val DIM_LABEL = ColorProvider(Color(0xFF8F92A1))
-        private val GEMINI_ACCENT = ColorProvider(Color(0xFF6EA8FE))
-        private val CLAUDE_ACCENT = ColorProvider(Color(0xFFFF9F0A))
-        private val TRACK_BG = ColorProvider(Color(0xFF1B1C24))
+        // Base Neumorphic color palette
+        val COLOR_WHITE = ColorProvider(Color(0xFFF2F4F8))
+        val COLOR_MUTED = ColorProvider(Color(0xFF8E95A8))
+        val COLOR_SUBTLE = ColorProvider(Color(0xFF5E6578))
+        val COLOR_TRACK_BG = ColorProvider(Color(0xFF0C0D13))
+        val COLOR_WARNING = ColorProvider(Color(0xFFFFC53D))
+        val COLOR_CRITICAL = ColorProvider(Color(0xFFFF5252))
 
-        private fun statusColor(pct: Int, defaultTint: ColorProvider): ColorProvider = when {
-            pct > 40 -> defaultTint
-            pct > 15 -> ColorProvider(Color(0xFFFFBF60))  // Warning amber
-            else -> ColorProvider(Color(0xFFFF6B6B))       // Critical red
+        fun statusColor(pct: Int, defaultColor: ColorProvider): ColorProvider = when {
+            pct > 40 -> defaultColor
+            pct > 15 -> COLOR_WARNING
+            else -> COLOR_CRITICAL
         }
 
         fun formatResetDate(epochMs: Long?, now: Long = System.currentTimeMillis()): String? {
@@ -90,113 +107,157 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                 if (deltaMin > 60) "Resets in ${deltaMin / 60}h" else "Resets in ${deltaMin}m"
             }
         }
+
+        fun formatRelativeSync(epochMs: Long): String {
+            if (epochMs <= 0) return "Just now"
+            val diffSec = (System.currentTimeMillis() - epochMs) / 1000
+            return when {
+                diffSec < 60 -> "Just now"
+                diffSec < 3600 -> "${diffSec / 60}m ago"
+                diffSec < 86400 -> "${diffSec / 3600}h ago"
+                else -> "Synced"
+            }
+        }
     }
 
     override val sizeMode: SizeMode = SizeMode.Responsive(
-        setOf(COMPACT_MINI, WIDE_BAR, SQUARE_TILE, EXPANDED_DASHBOARD)
+        setOf(SIZE_MINI, SIZE_WIDE_BAR, SIZE_SQUARE_2X2, SIZE_TALL_VERTICAL, SIZE_EXPANDED)
     )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val prefs = context.getSharedPreferences("antigravity_widget_cache", Context.MODE_PRIVATE)
+        val appWidgetId = try {
+            GlanceAppWidgetManager(context).getAppWidgetId(id)
+        } catch (_: Exception) {
+            AppWidgetManager.INVALID_APPWIDGET_ID
+        }
 
-        val accountLabel = prefs.getString("active_account_label", null)
-        val g5hPct = prefs.getInt(
-            "gemini_5h_pct",
-            prefs.getString("gemini_5h_text", "100")?.replace("%", "")?.toIntOrNull() ?: 100
-        )
-        val gWPct = prefs.getInt(
-            "gemini_weekly_pct",
-            prefs.getString("gemini_weekly_text", "100")?.replace("%", "")?.toIntOrNull() ?: 100
-        )
-        val c5hPct = prefs.getInt(
-            "claude_5h_pct",
-            prefs.getString("claude_5h_text", "100")?.replace("%", "")?.toIntOrNull() ?: 100
-        )
-        val cWPct = prefs.getInt(
-            "claude_weekly_pct",
-            prefs.getString("claude_weekly_text", "100")?.replace("%", "")?.toIntOrNull() ?: 100
-        )
+        val config = WidgetConfigManager.getConfig(context, appWidgetId)
+        val resolvedAccounts = WidgetConfigManager.resolveTargetAccounts(context, config.targetAccountId)
+        val allAccounts = WidgetConfigManager.getSavedAccounts(context)
+        val primaryAccount = resolvedAccounts.firstOrNull() ?: AntigravityAccount(label = "Default", token = "")
 
-        val g5hReset = prefs.getLong("gemini_5h_reset", 0L)
-        val c5hReset = prefs.getLong("claude_5h_reset", 0L)
-        val gResetStr = formatResetDate(g5hReset)
-        val cResetStr = formatResetDate(c5hReset)
+        val gemini5hPct = primaryAccount.gemini5hPct ?: 100
+        val geminiWeeklyPct = primaryAccount.geminiWeeklyPct ?: 100
+        val claude5hPct = primaryAccount.claude5hPct ?: 100
+        val claudeWeeklyPct = primaryAccount.claudeWeeklyPct ?: 100
+
+        val geminiResetStr = formatResetDate(primaryAccount.gemini5hResetEpoch)
+        val claudeResetStr = formatResetDate(primaryAccount.claude5hResetEpoch)
+        val lastSyncStr = formatRelativeSync(primaryAccount.lastSyncEpochMs)
+
+        // Determine Neumorphic background drawable based on chosen theme
+        val bgDrawable = when (config.theme) {
+            WidgetTheme.OBSIDIAN -> R.drawable.widget_neumorph_bg_card
+            WidgetTheme.SLATE -> R.drawable.widget_neumorph_bg_slate
+            WidgetTheme.CYBER -> R.drawable.widget_neumorph_bg_cyber
+        }
+
+        val configIntent = Intent(context, AntigravityWidgetConfigureActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+        }
 
         provideContent {
             val size = LocalSize.current
-            val isTall = size.height >= 60.dp
-            val isVeryWide = size.width >= 320.dp
+            val isTall = size.height >= 85.dp
+            val isVeryTall = size.height >= 165.dp
+            val isWide = size.width >= 170.dp
+            val isVeryWide = size.width >= 230.dp
 
             when {
-                // Tall widgets (2x2, 2x3, 3x2, 3x3, 4x2 phone):
-                // Directly renders the sleek layout matching the user's screenshot
-                isTall && !isVeryWide -> ScreenshotStyle2x2Layout(
-                    accountLabel = accountLabel,
-                    geminiName = "Gemini Pro",
-                    geminiPct = g5hPct,
-                    geminiResetStr = gResetStr,
-                    claudeName = "Claude",
-                    claudePct = c5hPct,
-                    claudeResetStr = cResetStr
+                // Category 5: Expanded Dashboard (W >= 230dp, H >= 100dp)
+                isVeryWide && isTall -> ExpandedDashboardLayout(
+                    config = config,
+                    primaryAccount = primaryAccount,
+                    allAccounts = allAccounts,
+                    isMultiAccount = config.targetAccountId == WidgetConfigManager.TARGET_ALL && allAccounts.size > 1,
+                    gemini5hPct = gemini5hPct,
+                    geminiWeeklyPct = geminiWeeklyPct,
+                    claude5hPct = claude5hPct,
+                    claudeWeeklyPct = claudeWeeklyPct,
+                    geminiResetStr = geminiResetStr,
+                    claudeResetStr = claudeResetStr,
+                    lastSyncStr = lastSyncStr,
+                    bgDrawable = bgDrawable,
+                    configIntent = configIntent
                 )
-                // Tall and very wide (tablet landscape):
-                isTall && isVeryWide -> ExpandedDashboardLayout(
-                    accountLabel = accountLabel,
-                    g5hPct = g5hPct,
-                    gWPct = gWPct,
-                    c5hPct = c5hPct,
-                    cWPct = cWPct,
-                    gResetStr = gResetStr,
-                    cResetStr = cResetStr
+
+                // Category 4: Tall Vertical (W < 230dp, H >= 165dp)
+                !isVeryWide && isVeryTall -> TallVerticalLayout(
+                    config = config,
+                    account = primaryAccount,
+                    gemini5hPct = gemini5hPct,
+                    geminiWeeklyPct = geminiWeeklyPct,
+                    claude5hPct = claude5hPct,
+                    claudeWeeklyPct = claudeWeeklyPct,
+                    geminiResetStr = geminiResetStr,
+                    claudeResetStr = claudeResetStr,
+                    lastSyncStr = lastSyncStr,
+                    bgDrawable = bgDrawable,
+                    configIntent = configIntent
                 )
-                // Short and wide (3x1 or 4x1 slim bar):
-                size.width >= 170.dp -> WideBarLayout(
-                    accountLabel = accountLabel,
-                    g5hPct = g5hPct,
-                    c5hPct = c5hPct,
-                    gResetStr = gResetStr,
-                    cResetStr = cResetStr
+
+                // Category 3: Balanced 2x2 Square Widget (W < 230dp, H 85dp..165dp)
+                !isVeryWide && isTall -> NeumorphicSquare2x2Layout(
+                    config = config,
+                    account = primaryAccount,
+                    gemini5hPct = gemini5hPct,
+                    geminiWeeklyPct = geminiWeeklyPct,
+                    claude5hPct = claude5hPct,
+                    claudeWeeklyPct = claudeWeeklyPct,
+                    geminiResetStr = geminiResetStr,
+                    claudeResetStr = claudeResetStr,
+                    lastSyncStr = lastSyncStr,
+                    bgDrawable = bgDrawable,
+                    configIntent = configIntent
                 )
-                // Compact mini (2x1):
+
+                // Category 2: Wide Slim Bar (W >= 170dp, H < 85dp)
+                isWide && !isTall -> WideBarLayout(
+                    config = config,
+                    account = primaryAccount,
+                    gemini5hPct = gemini5hPct,
+                    claude5hPct = claude5hPct,
+                    geminiResetStr = geminiResetStr,
+                    claudeResetStr = claudeResetStr,
+                    configIntent = configIntent
+                )
+
+                // Category 1: Compact Mini / 1x1 (W < 170dp, H < 85dp)
                 else -> CompactMiniLayout(
-                    accountLabel = accountLabel,
-                    g5hPct = g5hPct,
-                    c5hPct = c5hPct
+                    config = config,
+                    account = primaryAccount,
+                    gemini5hPct = gemini5hPct,
+                    claude5hPct = claude5hPct,
+                    configIntent = configIntent
                 )
             }
         }
     }
 
-    /**
-     * Iconic 2x2 Widget Layout designed from the user's uploaded reference:
-     * - Frosted dark card with 22dp smooth corners
-     * - Stylized 'A' logo mark + "Antigravity" + optional active account indicator
-     * - Instant tap-to-refresh icon '🔄'
-     * - Rounded inset cards for Gemini and Claude
-     * - 6dp rounded progress bars emptying as quota is consumed
-     * - Human-friendly reset dates (e.g. "Resets Wed 9:00 AM", "Resets Fri 12:00 PM")
-     */
+    // =========================================================================
+    // LAYOUT 1: Compact Mini (1x1 or 2x1 slim)
+    // =========================================================================
     @androidx.compose.runtime.Composable
-    private fun ScreenshotStyle2x2Layout(
-        accountLabel: String?,
-        geminiName: String,
-        geminiPct: Int,
-        geminiResetStr: String?,
-        claudeName: String,
-        claudePct: Int,
-        claudeResetStr: String?
+    private fun CompactMiniLayout(
+        config: WidgetConfig,
+        account: AntigravityAccount,
+        gemini5hPct: Int,
+        claude5hPct: Int,
+        configIntent: Intent
     ) {
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .background(ImageProvider(R.drawable.widget_bg_card))
+                .background(ImageProvider(R.drawable.widget_neumorph_bg_compact))
                 .clickable(actionStartActivity<MainActivity>())
-                .padding(12.dp)
+                .padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
             Column(
-                modifier = GlanceModifier.fillMaxSize()
+                modifier = GlanceModifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Header: Logo 'A', Title, Account badge, Refresh icon
+                // Header with mini brand and interactive account switcher
                 Row(
                     modifier = GlanceModifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -204,242 +265,110 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     Text(
                         text = "Λ",
                         style = TextStyle(
-                            color = SOFT_WHITE,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
+                            color = config.geminiColorProvider,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black
                         )
                     )
-                    Spacer(modifier = GlanceModifier.width(6.dp))
+                    Spacer(modifier = GlanceModifier.width(4.dp))
                     Text(
-                        text = if (!accountLabel.isNullOrBlank()) "Antigravity · $accountLabel" else "Antigravity",
+                        text = account.label.take(7),
                         style = TextStyle(
-                            color = SOFT_WHITE,
-                            fontSize = 12.sp,
+                            color = COLOR_WHITE,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
                         ),
-                        modifier = GlanceModifier.defaultWeight()
+                        modifier = GlanceModifier
+                            .clickable(actionRunCallback<CycleWidgetAccountCallback>())
+                            .defaultWeight()
                     )
-                    // Refresh Button (triggers background update immediately)
                     Text(
                         text = "🔄",
-                        style = TextStyle(color = SOFT_WHITE, fontSize = 13.sp),
+                        style = TextStyle(color = COLOR_MUTED, fontSize = 9.sp),
                         modifier = GlanceModifier
                             .clickable(actionRunCallback<RefreshWidgetCallback>())
-                            .padding(2.dp)
+                            .padding(1.dp)
+                    )
+                    Spacer(modifier = GlanceModifier.width(2.dp))
+                    Text(
+                        text = "⚙️",
+                        style = TextStyle(color = COLOR_MUTED, fontSize = 9.sp),
+                        modifier = GlanceModifier
+                            .clickable(actionStartActivity(configIntent))
+                            .padding(1.dp)
                     )
                 }
 
-                Spacer(modifier = GlanceModifier.defaultWeight())
+                Spacer(modifier = GlanceModifier.height(4.dp))
 
-                // Gemini Inset Card
-                Box(
-                    modifier = GlanceModifier
-                        .fillMaxWidth()
-                        .background(ImageProvider(R.drawable.widget_card_inset))
-                        .padding(horizontal = 10.dp, vertical = 7.dp)
+                // Gemini compact meter
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = GlanceModifier.fillMaxWidth()) {
-                        Row(
-                            modifier = GlanceModifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = geminiName,
-                                style = TextStyle(
-                                    color = SOFT_WHITE,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                            Spacer(modifier = GlanceModifier.defaultWeight())
-                            Text(
-                                text = "$geminiPct%",
-                                style = TextStyle(
-                                    color = SOFT_WHITE,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
-                        Spacer(modifier = GlanceModifier.height(5.dp))
-                        LinearProgressIndicator(
-                            progress = geminiPct.coerceIn(0, 100) / 100f,
-                            modifier = GlanceModifier.fillMaxWidth().height(6.dp),
-                            color = statusColor(geminiPct, GEMINI_ACCENT),
-                            backgroundColor = TRACK_BG
-                        )
-                        if (geminiResetStr != null) {
-                            Spacer(modifier = GlanceModifier.height(4.dp))
-                            Text(
-                                text = geminiResetStr,
-                                style = TextStyle(color = DIM_LABEL, fontSize = 9.sp)
-                            )
-                        }
-                    }
+                    Text(
+                        text = "G",
+                        style = TextStyle(color = COLOR_MUTED, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = GlanceModifier.width(4.dp))
+                    LinearProgressIndicator(
+                        progress = gemini5hPct.coerceIn(0, 100) / 100f,
+                        modifier = GlanceModifier.defaultWeight().height(4.dp),
+                        color = statusColor(gemini5hPct, config.geminiColorProvider),
+                        backgroundColor = COLOR_TRACK_BG
+                    )
+                    Spacer(modifier = GlanceModifier.width(4.dp))
+                    Text(
+                        text = "$gemini5hPct%",
+                        style = TextStyle(color = COLOR_WHITE, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    )
                 }
 
-                Spacer(modifier = GlanceModifier.height(6.dp))
+                Spacer(modifier = GlanceModifier.height(3.dp))
 
-                // Claude Inset Card
-                Box(
-                    modifier = GlanceModifier
-                        .fillMaxWidth()
-                        .background(ImageProvider(R.drawable.widget_card_inset))
-                        .padding(horizontal = 10.dp, vertical = 7.dp)
+                // Claude compact meter
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = GlanceModifier.fillMaxWidth()) {
-                        Row(
-                            modifier = GlanceModifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = claudeName,
-                                style = TextStyle(
-                                    color = SOFT_WHITE,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                            Spacer(modifier = GlanceModifier.defaultWeight())
-                            Text(
-                                text = "$claudePct%",
-                                style = TextStyle(
-                                    color = SOFT_WHITE,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
-                        Spacer(modifier = GlanceModifier.height(5.dp))
-                        LinearProgressIndicator(
-                            progress = claudePct.coerceIn(0, 100) / 100f,
-                            modifier = GlanceModifier.fillMaxWidth().height(6.dp),
-                            color = statusColor(claudePct, CLAUDE_ACCENT),
-                            backgroundColor = TRACK_BG
-                        )
-                        if (claudeResetStr != null) {
-                            Spacer(modifier = GlanceModifier.height(4.dp))
-                            Text(
-                                text = claudeResetStr,
-                                style = TextStyle(color = DIM_LABEL, fontSize = 9.sp)
-                            )
-                        }
-                    }
+                    Text(
+                        text = "C",
+                        style = TextStyle(color = COLOR_MUTED, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = GlanceModifier.width(4.dp))
+                    LinearProgressIndicator(
+                        progress = claude5hPct.coerceIn(0, 100) / 100f,
+                        modifier = GlanceModifier.defaultWeight().height(4.dp),
+                        color = statusColor(claude5hPct, config.claudeColorProvider),
+                        backgroundColor = COLOR_TRACK_BG
+                    )
+                    Spacer(modifier = GlanceModifier.width(4.dp))
+                    Text(
+                        text = "$claude5hPct%",
+                        style = TextStyle(color = COLOR_WHITE, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    )
                 }
             }
         }
     }
 
+    // =========================================================================
+    // LAYOUT 2: Wide Slim Bar (3x1 / 4x1)
+    // =========================================================================
     @androidx.compose.runtime.Composable
     private fun WideBarLayout(
-        accountLabel: String?,
-        g5hPct: Int,
-        c5hPct: Int,
-        gResetStr: String?,
-        cResetStr: String?
+        config: WidgetConfig,
+        account: AntigravityAccount,
+        gemini5hPct: Int,
+        claude5hPct: Int,
+        geminiResetStr: String?,
+        claudeResetStr: String?,
+        configIntent: Intent
     ) {
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .background(ImageProvider(R.drawable.widget_bg_compact))
-                .clickable(actionStartActivity<MainActivity>())
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                modifier = GlanceModifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Gemini Column
-                Column(
-                    modifier = GlanceModifier.defaultWeight(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        modifier = GlanceModifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Gemini Pro",
-                            style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        )
-                        Spacer(modifier = GlanceModifier.defaultWeight())
-                        Text(
-                            text = "$g5hPct%",
-                            style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        )
-                    }
-                    Spacer(modifier = GlanceModifier.height(4.dp))
-                    LinearProgressIndicator(
-                        progress = g5hPct.coerceIn(0, 100) / 100f,
-                        modifier = GlanceModifier.fillMaxWidth().height(5.dp),
-                        color = statusColor(g5hPct, GEMINI_ACCENT),
-                        backgroundColor = TRACK_BG
-                    )
-                    if (gResetStr != null) {
-                        Spacer(modifier = GlanceModifier.height(2.dp))
-                        Text(text = gResetStr, style = TextStyle(color = DIM_LABEL, fontSize = 9.sp))
-                    }
-                }
-
-                Spacer(modifier = GlanceModifier.width(14.dp))
-
-                // Claude Column
-                Column(
-                    modifier = GlanceModifier.defaultWeight(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        modifier = GlanceModifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Claude",
-                            style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        )
-                        Spacer(modifier = GlanceModifier.defaultWeight())
-                        Text(
-                            text = "$c5hPct%",
-                            style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        )
-                    }
-                    Spacer(modifier = GlanceModifier.height(4.dp))
-                    LinearProgressIndicator(
-                        progress = c5hPct.coerceIn(0, 100) / 100f,
-                        modifier = GlanceModifier.fillMaxWidth().height(5.dp),
-                        color = statusColor(c5hPct, CLAUDE_ACCENT),
-                        backgroundColor = TRACK_BG
-                    )
-                    if (cResetStr != null) {
-                        Spacer(modifier = GlanceModifier.height(2.dp))
-                        Text(text = cResetStr, style = TextStyle(color = DIM_LABEL, fontSize = 9.sp))
-                    }
-                }
-
-                Spacer(modifier = GlanceModifier.width(8.dp))
-
-                // Quick refresh icon
-                Text(
-                    text = "🔄",
-                    style = TextStyle(color = SOFT_WHITE, fontSize = 12.sp),
-                    modifier = GlanceModifier
-                        .clickable(actionRunCallback<RefreshWidgetCallback>())
-                        .padding(2.dp)
-                )
-            }
-        }
-    }
-
-    @androidx.compose.runtime.Composable
-    private fun CompactMiniLayout(
-        accountLabel: String?,
-        g5hPct: Int,
-        c5hPct: Int
-    ) {
-        Box(
-            modifier = GlanceModifier
-                .fillMaxSize()
-                .background(ImageProvider(R.drawable.widget_bg_compact))
+                .background(ImageProvider(R.drawable.widget_neumorph_bg_compact))
                 .clickable(actionStartActivity<MainActivity>())
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center
@@ -448,251 +377,738 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                 modifier = GlanceModifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Gemini Mini Column
-                Column(
-                    modifier = GlanceModifier.defaultWeight(),
-                    verticalAlignment = Alignment.CenterVertically
+                // Left Brand + Interactive Account Pill
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = GlanceModifier
+                        .clickable(actionRunCallback<CycleWidgetAccountCallback>())
+                        .padding(end = 8.dp)
                 ) {
+                    Text(
+                        text = "Λ",
+                        style = TextStyle(
+                            color = config.geminiColorProvider,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    )
+                    Spacer(modifier = GlanceModifier.width(4.dp))
+                    Column {
+                        Text(
+                            text = account.label.take(10),
+                            style = TextStyle(color = COLOR_WHITE, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "⇄ Switch",
+                            style = TextStyle(color = COLOR_SUBTLE, fontSize = 8.sp)
+                        )
+                    }
+                }
+
+                // Gemini Module
+                Column(modifier = GlanceModifier.defaultWeight()) {
                     Row(
                         modifier = GlanceModifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = "Gemini",
-                            style = TextStyle(color = SOFT_WHITE, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            style = TextStyle(color = COLOR_WHITE, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         )
                         Spacer(modifier = GlanceModifier.defaultWeight())
                         Text(
-                            text = "$g5hPct%",
-                            style = TextStyle(color = SOFT_WHITE, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            text = "$gemini5hPct%",
+                            style = TextStyle(
+                                color = statusColor(gemini5hPct, config.geminiColorProvider),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         )
                     }
                     Spacer(modifier = GlanceModifier.height(3.dp))
                     LinearProgressIndicator(
-                        progress = g5hPct.coerceIn(0, 100) / 100f,
+                        progress = gemini5hPct.coerceIn(0, 100) / 100f,
                         modifier = GlanceModifier.fillMaxWidth().height(4.dp),
-                        color = statusColor(g5hPct, GEMINI_ACCENT),
-                        backgroundColor = TRACK_BG
+                        color = statusColor(gemini5hPct, config.geminiColorProvider),
+                        backgroundColor = COLOR_TRACK_BG
                     )
+                    if (config.showResetTime && geminiResetStr != null) {
+                        Spacer(modifier = GlanceModifier.height(1.dp))
+                        Text(text = geminiResetStr, style = TextStyle(color = COLOR_MUTED, fontSize = 8.sp))
+                    }
                 }
 
                 Spacer(modifier = GlanceModifier.width(10.dp))
 
-                // Claude Mini Column
-                Column(
-                    modifier = GlanceModifier.defaultWeight(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                // Claude Module
+                Column(modifier = GlanceModifier.defaultWeight()) {
                     Row(
                         modifier = GlanceModifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = "Claude",
-                            style = TextStyle(color = SOFT_WHITE, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            style = TextStyle(color = COLOR_WHITE, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         )
                         Spacer(modifier = GlanceModifier.defaultWeight())
                         Text(
-                            text = "$c5hPct%",
-                            style = TextStyle(color = SOFT_WHITE, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            text = "$claude5hPct%",
+                            style = TextStyle(
+                                color = statusColor(claude5hPct, config.claudeColorProvider),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         )
                     }
                     Spacer(modifier = GlanceModifier.height(3.dp))
                     LinearProgressIndicator(
-                        progress = c5hPct.coerceIn(0, 100) / 100f,
+                        progress = claude5hPct.coerceIn(0, 100) / 100f,
                         modifier = GlanceModifier.fillMaxWidth().height(4.dp),
-                        color = statusColor(c5hPct, CLAUDE_ACCENT),
-                        backgroundColor = TRACK_BG
+                        color = statusColor(claude5hPct, config.claudeColorProvider),
+                        backgroundColor = COLOR_TRACK_BG
                     )
+                    if (config.showResetTime && claudeResetStr != null) {
+                        Spacer(modifier = GlanceModifier.height(1.dp))
+                        Text(text = claudeResetStr, style = TextStyle(color = COLOR_MUTED, fontSize = 8.sp))
+                    }
                 }
+
+                Spacer(modifier = GlanceModifier.width(6.dp))
+
+                // Tactile Refresh Button
+                Text(
+                    text = "🔄",
+                    style = TextStyle(color = COLOR_WHITE, fontSize = 11.sp),
+                    modifier = GlanceModifier
+                        .clickable(actionRunCallback<RefreshWidgetCallback>())
+                        .padding(2.dp)
+                )
+
+                Spacer(modifier = GlanceModifier.width(4.dp))
+
+                // Tactile Settings Button
+                Text(
+                    text = "⚙️",
+                    style = TextStyle(color = COLOR_WHITE, fontSize = 11.sp),
+                    modifier = GlanceModifier
+                        .clickable(actionStartActivity(configIntent))
+                        .padding(2.dp)
+                )
             }
         }
     }
 
+    // =========================================================================
+    // LAYOUT 3: Balanced 2x2 Square Widget (Core daily driver)
+    // =========================================================================
     @androidx.compose.runtime.Composable
-    private fun ExpandedDashboardLayout(
-        accountLabel: String?,
-        g5hPct: Int,
-        gWPct: Int,
-        c5hPct: Int,
-        cWPct: Int,
-        gResetStr: String?,
-        cResetStr: String?
+    private fun NeumorphicSquare2x2Layout(
+        config: WidgetConfig,
+        account: AntigravityAccount,
+        gemini5hPct: Int,
+        geminiWeeklyPct: Int,
+        claude5hPct: Int,
+        claudeWeeklyPct: Int,
+        geminiResetStr: String?,
+        claudeResetStr: String?,
+        lastSyncStr: String,
+        bgDrawable: Int,
+        configIntent: Intent
     ) {
+        val vertPadding = if (config.compactDensity) 8.dp else 10.dp
+        val horizPadding = if (config.compactDensity) 9.dp else 11.dp
+
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .background(ImageProvider(R.drawable.widget_bg_card))
+                .background(ImageProvider(bgDrawable))
                 .clickable(actionStartActivity<MainActivity>())
-                .padding(12.dp)
+                .padding(horizontal = horizPadding, vertical = vertPadding)
         ) {
             Column(
-                modifier = GlanceModifier.fillMaxSize(),
-                verticalAlignment = Alignment.Top
+                modifier = GlanceModifier.fillMaxSize()
             ) {
-                // Title Header
+                // Header: Logo + Interactive Account Chip + Refresh Button + Settings Button
                 Row(
                     modifier = GlanceModifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "Λ",
-                        style = TextStyle(color = SOFT_WHITE, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        style = TextStyle(
+                            color = config.geminiColorProvider,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    )
+                    Spacer(modifier = GlanceModifier.width(5.dp))
+
+                    // Tactile Account Pill (tapping cycles account)
+                    Row(
+                        modifier = GlanceModifier
+                            .background(ImageProvider(R.drawable.widget_neumorph_chip))
+                            .clickable(actionRunCallback<CycleWidgetAccountCallback>())
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                            .defaultWeight(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = account.label.take(10),
+                            style = TextStyle(
+                                color = COLOR_WHITE,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                        Spacer(modifier = GlanceModifier.width(3.dp))
+                        Text(
+                            text = "⇄",
+                            style = TextStyle(color = COLOR_MUTED, fontSize = 9.sp)
+                        )
+                    }
+
+                    Spacer(modifier = GlanceModifier.width(4.dp))
+
+                    // Tactile Refresh Button
+                    Box(
+                        modifier = GlanceModifier
+                            .background(ImageProvider(R.drawable.widget_neumorph_button))
+                            .clickable(actionRunCallback<RefreshWidgetCallback>())
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "🔄",
+                            style = TextStyle(color = COLOR_WHITE, fontSize = 10.sp)
+                        )
+                    }
+
+                    Spacer(modifier = GlanceModifier.width(3.dp))
+
+                    // Tactile Settings / Customization Button
+                    Box(
+                        modifier = GlanceModifier
+                            .background(ImageProvider(R.drawable.widget_neumorph_button))
+                            .clickable(actionStartActivity(configIntent))
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "⚙️",
+                            style = TextStyle(color = COLOR_WHITE, fontSize = 10.sp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = GlanceModifier.height(6.dp))
+
+                // Gemini Inset Sunken Module
+                NeumorphicModelInsetCard(
+                    title = "Gemini Pro",
+                    percentage = gemini5hPct,
+                    progressColor = statusColor(gemini5hPct, config.geminiColorProvider),
+                    resetStr = if (config.showResetTime) geminiResetStr else null,
+                    weeklyPct = if (config.showWeekly) geminiWeeklyPct else null,
+                    modifier = GlanceModifier.fillMaxWidth().defaultWeight()
+                )
+
+                Spacer(modifier = GlanceModifier.height(5.dp))
+
+                // Claude Inset Sunken Module
+                NeumorphicModelInsetCard(
+                    title = "Claude Sonnet",
+                    percentage = claude5hPct,
+                    progressColor = statusColor(claude5hPct, config.claudeColorProvider),
+                    resetStr = if (config.showResetTime) claudeResetStr else null,
+                    weeklyPct = if (config.showWeekly) claudeWeeklyPct else null,
+                    modifier = GlanceModifier.fillMaxWidth().defaultWeight()
+                )
+
+                Spacer(modifier = GlanceModifier.height(4.dp))
+
+                // Footer Status Row (densely fills space with zero gaps)
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (!account.plan.isNullOrBlank()) account.plan!! else "Antigravity",
+                        style = TextStyle(color = COLOR_SUBTLE, fontSize = 8.sp, fontWeight = FontWeight.Medium)
+                    )
+                    Spacer(modifier = GlanceModifier.defaultWeight())
+                    Text(
+                        text = lastSyncStr,
+                        style = TextStyle(color = COLOR_SUBTLE, fontSize = 8.sp)
+                    )
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // LAYOUT 4: Tall Vertical Widget (2x3 / 2x4)
+    // =========================================================================
+    @androidx.compose.runtime.Composable
+    private fun TallVerticalLayout(
+        config: WidgetConfig,
+        account: AntigravityAccount,
+        gemini5hPct: Int,
+        geminiWeeklyPct: Int,
+        claude5hPct: Int,
+        claudeWeeklyPct: Int,
+        geminiResetStr: String?,
+        claudeResetStr: String?,
+        lastSyncStr: String,
+        bgDrawable: Int,
+        configIntent: Intent
+    ) {
+        Box(
+            modifier = GlanceModifier
+                .fillMaxSize()
+                .background(ImageProvider(bgDrawable))
+                .clickable(actionStartActivity<MainActivity>())
+                .padding(10.dp)
+        ) {
+            Column(modifier = GlanceModifier.fillMaxSize()) {
+                // Header
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Λ Antigravity",
+                        style = TextStyle(
+                            color = config.geminiColorProvider,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black
+                        ),
+                        modifier = GlanceModifier.defaultWeight()
+                    )
+                    Box(
+                        modifier = GlanceModifier
+                            .background(ImageProvider(R.drawable.widget_neumorph_chip))
+                            .clickable(actionRunCallback<CycleWidgetAccountCallback>())
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "${account.label.take(8)} ⇄",
+                            style = TextStyle(color = COLOR_WHITE, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        )
+                    }
+                    Spacer(modifier = GlanceModifier.width(3.dp))
+                    Box(
+                        modifier = GlanceModifier
+                            .background(ImageProvider(R.drawable.widget_neumorph_button))
+                            .clickable(actionRunCallback<RefreshWidgetCallback>())
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(text = "🔄", style = TextStyle(color = COLOR_WHITE, fontSize = 9.sp))
+                    }
+                    Spacer(modifier = GlanceModifier.width(3.dp))
+                    Box(
+                        modifier = GlanceModifier
+                            .background(ImageProvider(R.drawable.widget_neumorph_button))
+                            .clickable(actionStartActivity(configIntent))
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(text = "⚙️", style = TextStyle(color = COLOR_WHITE, fontSize = 9.sp))
+                    }
+                }
+
+                Spacer(modifier = GlanceModifier.height(8.dp))
+
+                // Gemini 5h Card
+                NeumorphicModelInsetCard(
+                    title = "Gemini (5h Limit)",
+                    percentage = gemini5hPct,
+                    progressColor = statusColor(gemini5hPct, config.geminiColorProvider),
+                    resetStr = geminiResetStr,
+                    modifier = GlanceModifier.fillMaxWidth().defaultWeight()
+                )
+
+                Spacer(modifier = GlanceModifier.height(5.dp))
+
+                // Gemini Weekly Card
+                NeumorphicModelInsetCard(
+                    title = "Gemini (Weekly)",
+                    percentage = geminiWeeklyPct,
+                    progressColor = statusColor(geminiWeeklyPct, config.geminiColorProvider),
+                    resetStr = null,
+                    modifier = GlanceModifier.fillMaxWidth().defaultWeight()
+                )
+
+                Spacer(modifier = GlanceModifier.height(5.dp))
+
+                // Claude 5h Card
+                NeumorphicModelInsetCard(
+                    title = "Claude (5h Limit)",
+                    percentage = claude5hPct,
+                    progressColor = statusColor(claude5hPct, config.claudeColorProvider),
+                    resetStr = claudeResetStr,
+                    modifier = GlanceModifier.fillMaxWidth().defaultWeight()
+                )
+
+                Spacer(modifier = GlanceModifier.height(5.dp))
+
+                // Claude Weekly Card
+                NeumorphicModelInsetCard(
+                    title = "Claude (Weekly)",
+                    percentage = claudeWeeklyPct,
+                    progressColor = statusColor(claudeWeeklyPct, config.claudeColorProvider),
+                    resetStr = null,
+                    modifier = GlanceModifier.fillMaxWidth().defaultWeight()
+                )
+
+                Spacer(modifier = GlanceModifier.height(4.dp))
+
+                // Footer
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = account.email ?: "CodexBar",
+                        style = TextStyle(color = COLOR_SUBTLE, fontSize = 8.sp)
+                    )
+                    Spacer(modifier = GlanceModifier.defaultWeight())
+                    Text(text = lastSyncStr, style = TextStyle(color = COLOR_SUBTLE, fontSize = 8.sp))
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // LAYOUT 5: Expanded Dashboard (4x2 / 4x3 / Tablet)
+    // =========================================================================
+    @androidx.compose.runtime.Composable
+    private fun ExpandedDashboardLayout(
+        config: WidgetConfig,
+        primaryAccount: AntigravityAccount,
+        allAccounts: List<AntigravityAccount>,
+        isMultiAccount: Boolean,
+        gemini5hPct: Int,
+        geminiWeeklyPct: Int,
+        claude5hPct: Int,
+        claudeWeeklyPct: Int,
+        geminiResetStr: String?,
+        claudeResetStr: String?,
+        lastSyncStr: String,
+        bgDrawable: Int,
+        configIntent: Intent
+    ) {
+        Box(
+            modifier = GlanceModifier
+                .fillMaxSize()
+                .background(ImageProvider(bgDrawable))
+                .clickable(actionStartActivity<MainActivity>())
+                .padding(11.dp)
+        ) {
+            Column(modifier = GlanceModifier.fillMaxSize()) {
+                // Header
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Λ",
+                        style = TextStyle(
+                            color = config.geminiColorProvider,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Black
+                        )
                     )
                     Spacer(modifier = GlanceModifier.width(6.dp))
                     Text(
-                        text = if (!accountLabel.isNullOrBlank()) "Antigravity · $accountLabel" else "Antigravity Quota",
+                        text = if (isMultiAccount) "Antigravity Multi-Account" else "Antigravity · ${primaryAccount.label}",
+                        style = TextStyle(color = COLOR_WHITE, fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                        modifier = GlanceModifier.defaultWeight()
+                    )
+
+                    // Account Cycle chip
+                    Box(
+                        modifier = GlanceModifier
+                            .background(ImageProvider(R.drawable.widget_neumorph_chip))
+                            .clickable(actionRunCallback<CycleWidgetAccountCallback>())
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = if (isMultiAccount) "All Accounts ⇄" else "${primaryAccount.label.take(8)} ⇄",
+                            style = TextStyle(color = COLOR_WHITE, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        )
+                    }
+
+                    Spacer(modifier = GlanceModifier.width(4.dp))
+
+                    // Refresh button
+                    Box(
+                        modifier = GlanceModifier
+                            .background(ImageProvider(R.drawable.widget_neumorph_button))
+                            .clickable(actionRunCallback<RefreshWidgetCallback>())
+                            .padding(horizontal = 5.dp, vertical = 3.dp)
+                    ) {
+                        Text(text = "🔄", style = TextStyle(color = COLOR_WHITE, fontSize = 11.sp))
+                    }
+
+                    Spacer(modifier = GlanceModifier.width(4.dp))
+
+                    // Settings / Customize button
+                    Box(
+                        modifier = GlanceModifier
+                            .background(ImageProvider(R.drawable.widget_neumorph_button))
+                            .clickable(actionStartActivity(configIntent))
+                            .padding(horizontal = 5.dp, vertical = 3.dp)
+                    ) {
+                        Text(text = "⚙️", style = TextStyle(color = COLOR_WHITE, fontSize = 11.sp))
+                    }
+                }
+
+                Spacer(modifier = GlanceModifier.height(8.dp))
+
+                if (isMultiAccount) {
+                    // Multi-Account Grid view: Renders each account side by side!
+                    Row(
+                        modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        allAccounts.take(3).forEachIndexed { index, acc ->
+                            if (index > 0) Spacer(modifier = GlanceModifier.width(8.dp))
+                            MultiAccountSummaryCard(
+                                account = acc,
+                                config = config,
+                                modifier = GlanceModifier.defaultWeight().fillMaxHeight()
+                            )
+                        }
+                    }
+                } else {
+                    // Single Account Deep Inspection: 2 side-by-side Neumorphic columns
+                    Row(
+                        modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Gemini Deep Panel
+                        Box(
+                            modifier = GlanceModifier
+                                .defaultWeight()
+                                .fillMaxHeight()
+                                .background(ImageProvider(R.drawable.widget_neumorph_inset_card))
+                                .padding(9.dp)
+                        ) {
+                            Column(modifier = GlanceModifier.fillMaxSize()) {
+                                Row(
+                                    modifier = GlanceModifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Gemini Models",
+                                        style = TextStyle(color = COLOR_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    )
+                                    Spacer(modifier = GlanceModifier.defaultWeight())
+                                    Text(
+                                        text = "$gemini5hPct%",
+                                        style = TextStyle(
+                                            color = statusColor(gemini5hPct, config.geminiColorProvider),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Black
+                                        )
+                                    )
+                                }
+                                Spacer(modifier = GlanceModifier.height(3.dp))
+                                LinearProgressIndicator(
+                                    progress = gemini5hPct.coerceIn(0, 100) / 100f,
+                                    modifier = GlanceModifier.fillMaxWidth().height(5.dp),
+                                    color = statusColor(gemini5hPct, config.geminiColorProvider),
+                                    backgroundColor = COLOR_TRACK_BG
+                                )
+                                if (geminiResetStr != null) {
+                                    Spacer(modifier = GlanceModifier.height(2.dp))
+                                    Text(text = geminiResetStr, style = TextStyle(color = COLOR_MUTED, fontSize = 8.sp))
+                                }
+
+                                if (config.showWeekly) {
+                                    Spacer(modifier = GlanceModifier.height(6.dp))
+                                    Row(
+                                        modifier = GlanceModifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(text = "Weekly Quota", style = TextStyle(color = COLOR_MUTED, fontSize = 9.sp))
+                                        Spacer(modifier = GlanceModifier.defaultWeight())
+                                        Text(
+                                            text = "$geminiWeeklyPct%",
+                                            style = TextStyle(color = COLOR_WHITE, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        )
+                                    }
+                                    Spacer(modifier = GlanceModifier.height(2.dp))
+                                    LinearProgressIndicator(
+                                        progress = geminiWeeklyPct.coerceIn(0, 100) / 100f,
+                                        modifier = GlanceModifier.fillMaxWidth().height(4.dp),
+                                        color = statusColor(geminiWeeklyPct, config.geminiColorProvider),
+                                        backgroundColor = COLOR_TRACK_BG
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = GlanceModifier.width(8.dp))
+
+                        // Claude Deep Panel
+                        Box(
+                            modifier = GlanceModifier
+                                .defaultWeight()
+                                .fillMaxHeight()
+                                .background(ImageProvider(R.drawable.widget_neumorph_inset_card))
+                                .padding(9.dp)
+                        ) {
+                            Column(modifier = GlanceModifier.fillMaxSize()) {
+                                Row(
+                                    modifier = GlanceModifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Claude & GPT",
+                                        style = TextStyle(color = COLOR_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    )
+                                    Spacer(modifier = GlanceModifier.defaultWeight())
+                                    Text(
+                                        text = "$claude5hPct%",
+                                        style = TextStyle(
+                                            color = statusColor(claude5hPct, config.claudeColorProvider),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Black
+                                        )
+                                    )
+                                }
+                                Spacer(modifier = GlanceModifier.height(3.dp))
+                                LinearProgressIndicator(
+                                    progress = claude5hPct.coerceIn(0, 100) / 100f,
+                                    modifier = GlanceModifier.fillMaxWidth().height(5.dp),
+                                    color = statusColor(claude5hPct, config.claudeColorProvider),
+                                    backgroundColor = COLOR_TRACK_BG
+                                )
+                                if (claudeResetStr != null) {
+                                    Spacer(modifier = GlanceModifier.height(2.dp))
+                                    Text(text = claudeResetStr, style = TextStyle(color = COLOR_MUTED, fontSize = 8.sp))
+                                }
+
+                                if (config.showWeekly) {
+                                    Spacer(modifier = GlanceModifier.height(6.dp))
+                                    Row(
+                                        modifier = GlanceModifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(text = "Weekly Quota", style = TextStyle(color = COLOR_MUTED, fontSize = 9.sp))
+                                        Spacer(modifier = GlanceModifier.defaultWeight())
+                                        Text(
+                                            text = "$claudeWeeklyPct%",
+                                            style = TextStyle(color = COLOR_WHITE, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        )
+                                    }
+                                    Spacer(modifier = GlanceModifier.height(2.dp))
+                                    LinearProgressIndicator(
+                                        progress = claudeWeeklyPct.coerceIn(0, 100) / 100f,
+                                        modifier = GlanceModifier.fillMaxWidth().height(4.dp),
+                                        color = statusColor(claudeWeeklyPct, config.claudeColorProvider),
+                                        backgroundColor = COLOR_TRACK_BG
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = GlanceModifier.height(4.dp))
+
+                // Footer Bar
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (!primaryAccount.plan.isNullOrBlank()) "Plan: ${primaryAccount.plan}" else "Active Account",
+                        style = TextStyle(color = COLOR_SUBTLE, fontSize = 8.sp)
+                    )
+                    Spacer(modifier = GlanceModifier.defaultWeight())
+                    Text(
+                        text = lastSyncStr,
+                        style = TextStyle(color = COLOR_SUBTLE, fontSize = 8.sp)
+                    )
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // REUSABLE NEUMORPHIC COMPONENTS
+    // =========================================================================
+    @androidx.compose.runtime.Composable
+    private fun NeumorphicModelInsetCard(
+        title: String,
+        percentage: Int,
+        progressColor: ColorProvider,
+        resetStr: String?,
+        weeklyPct: Int? = null,
+        modifier: GlanceModifier = GlanceModifier
+    ) {
+        Box(
+            modifier = modifier
+                .background(ImageProvider(R.drawable.widget_neumorph_inset_card))
+                .padding(horizontal = 9.dp, vertical = 6.dp)
+        ) {
+            Column(
+                modifier = GlanceModifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Title and Percentage badge
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
                         style = TextStyle(
-                            color = SOFT_WHITE,
-                            fontSize = 13.sp,
+                            color = COLOR_WHITE,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
                     )
                     Spacer(modifier = GlanceModifier.defaultWeight())
                     Text(
-                        text = "🔄",
-                        style = TextStyle(color = SOFT_WHITE, fontSize = 13.sp),
-                        modifier = GlanceModifier
-                            .clickable(actionRunCallback<RefreshWidgetCallback>())
-                            .padding(2.dp)
+                        text = "$percentage%",
+                        style = TextStyle(
+                            color = progressColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black
+                        )
                     )
                 }
 
-                Spacer(modifier = GlanceModifier.height(8.dp))
+                Spacer(modifier = GlanceModifier.height(4.dp))
 
-                // Two Inset Cards Side by Side
-                Row(
-                    modifier = GlanceModifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Gemini Card
-                    Box(
-                        modifier = GlanceModifier
-                            .defaultWeight()
-                            .background(ImageProvider(R.drawable.widget_card_inset))
-                            .padding(10.dp)
+                // Sunken Track + Glow Progress Indicator
+                LinearProgressIndicator(
+                    progress = percentage.coerceIn(0, 100) / 100f,
+                    modifier = GlanceModifier.fillMaxWidth().height(5.dp),
+                    color = progressColor,
+                    backgroundColor = COLOR_TRACK_BG
+                )
+
+                // Subtitle metadata (reset string or weekly quota)
+                if (resetStr != null || weeklyPct != null) {
+                    Spacer(modifier = GlanceModifier.height(3.dp))
+                    Row(
+                        modifier = GlanceModifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        if (resetStr != null) {
                             Text(
-                                text = "Gemini Models",
-                                style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            )
-                            Spacer(modifier = GlanceModifier.height(6.dp))
-
-                            // 5-Hour Limit
-                            Row(
-                                modifier = GlanceModifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(text = "5h Limit", style = TextStyle(color = DIM_LABEL, fontSize = 10.sp))
-                                Spacer(modifier = GlanceModifier.defaultWeight())
-                                Text(
-                                    text = "$g5hPct% rem",
-                                    style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                )
-                            }
-                            Spacer(modifier = GlanceModifier.height(4.dp))
-                            LinearProgressIndicator(
-                                progress = g5hPct.coerceIn(0, 100) / 100f,
-                                modifier = GlanceModifier.fillMaxWidth().height(5.dp),
-                                color = statusColor(g5hPct, GEMINI_ACCENT),
-                                backgroundColor = TRACK_BG
-                            )
-                            if (gResetStr != null) {
-                                Spacer(modifier = GlanceModifier.height(2.dp))
-                                Text(
-                                    text = gResetStr,
-                                    style = TextStyle(color = DIM_LABEL, fontSize = 9.sp)
-                                )
-                            }
-
-                            Spacer(modifier = GlanceModifier.height(6.dp))
-
-                            // Weekly Limit
-                            Row(
-                                modifier = GlanceModifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(text = "Weekly", style = TextStyle(color = DIM_LABEL, fontSize = 10.sp))
-                                Spacer(modifier = GlanceModifier.defaultWeight())
-                                Text(
-                                    text = "$gWPct% rem",
-                                    style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                )
-                            }
-                            Spacer(modifier = GlanceModifier.height(4.dp))
-                            LinearProgressIndicator(
-                                progress = gWPct.coerceIn(0, 100) / 100f,
-                                modifier = GlanceModifier.fillMaxWidth().height(5.dp),
-                                color = statusColor(gWPct, GEMINI_ACCENT),
-                                backgroundColor = TRACK_BG
+                                text = resetStr,
+                                style = TextStyle(color = COLOR_MUTED, fontSize = 8.sp)
                             )
                         }
-                    }
-
-                    Spacer(modifier = GlanceModifier.width(8.dp))
-
-                    // Claude & GPT Card
-                    Box(
-                        modifier = GlanceModifier
-                            .defaultWeight()
-                            .background(ImageProvider(R.drawable.widget_card_inset))
-                            .padding(10.dp)
-                    ) {
-                        Column {
+                        if (weeklyPct != null) {
+                            Spacer(modifier = GlanceModifier.defaultWeight())
                             Text(
-                                text = "Claude & GPT",
-                                style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            )
-                            Spacer(modifier = GlanceModifier.height(6.dp))
-
-                            // 5-Hour Limit
-                            Row(
-                                modifier = GlanceModifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(text = "5h Limit", style = TextStyle(color = DIM_LABEL, fontSize = 10.sp))
-                                Spacer(modifier = GlanceModifier.defaultWeight())
-                                Text(
-                                    text = "$c5hPct% rem",
-                                    style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                )
-                            }
-                            Spacer(modifier = GlanceModifier.height(4.dp))
-                            LinearProgressIndicator(
-                                progress = c5hPct.coerceIn(0, 100) / 100f,
-                                modifier = GlanceModifier.fillMaxWidth().height(5.dp),
-                                color = statusColor(c5hPct, CLAUDE_ACCENT),
-                                backgroundColor = TRACK_BG
-                            )
-                            if (cResetStr != null) {
-                                Spacer(modifier = GlanceModifier.height(2.dp))
-                                Text(
-                                    text = cResetStr,
-                                    style = TextStyle(color = DIM_LABEL, fontSize = 9.sp)
-                                )
-                            }
-
-                            Spacer(modifier = GlanceModifier.height(6.dp))
-
-                            // Weekly Limit
-                            Row(
-                                modifier = GlanceModifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(text = "Weekly", style = TextStyle(color = DIM_LABEL, fontSize = 10.sp))
-                                Spacer(modifier = GlanceModifier.defaultWeight())
-                                Text(
-                                    text = "$cWPct% rem",
-                                    style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                )
-                            }
-                            Spacer(modifier = GlanceModifier.height(4.dp))
-                            LinearProgressIndicator(
-                                progress = cWPct.coerceIn(0, 100) / 100f,
-                                modifier = GlanceModifier.fillMaxWidth().height(5.dp),
-                                color = statusColor(cWPct, CLAUDE_ACCENT),
-                                backgroundColor = TRACK_BG
+                                text = "W: $weeklyPct%",
+                                style = TextStyle(color = COLOR_MUTED, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                             )
                         }
                     }
@@ -700,8 +1116,110 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
             }
         }
     }
+
+    @androidx.compose.runtime.Composable
+    private fun MultiAccountSummaryCard(
+        account: AntigravityAccount,
+        config: WidgetConfig,
+        modifier: GlanceModifier = GlanceModifier
+    ) {
+        val gPct = account.gemini5hPct ?: 100
+        val cPct = account.claude5hPct ?: 100
+
+        Box(
+            modifier = modifier
+                .background(ImageProvider(R.drawable.widget_neumorph_inset_card))
+                .padding(8.dp)
+        ) {
+            Column(modifier = GlanceModifier.fillMaxSize()) {
+                Text(
+                    text = account.label,
+                    style = TextStyle(color = COLOR_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                )
+                if (!account.email.isNullOrBlank()) {
+                    Text(
+                        text = account.email,
+                        style = TextStyle(color = COLOR_SUBTLE, fontSize = 8.sp)
+                    )
+                }
+                Spacer(modifier = GlanceModifier.height(6.dp))
+
+                // Gemini Row
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "Gemini", style = TextStyle(color = COLOR_MUTED, fontSize = 9.sp))
+                    Spacer(modifier = GlanceModifier.defaultWeight())
+                    Text(
+                        text = "$gPct%",
+                        style = TextStyle(
+                            color = statusColor(gPct, config.geminiColorProvider),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                }
+                Spacer(modifier = GlanceModifier.height(2.dp))
+                LinearProgressIndicator(
+                    progress = gPct.coerceIn(0, 100) / 100f,
+                    modifier = GlanceModifier.fillMaxWidth().height(4.dp),
+                    color = statusColor(gPct, config.geminiColorProvider),
+                    backgroundColor = COLOR_TRACK_BG
+                )
+
+                Spacer(modifier = GlanceModifier.height(5.dp))
+
+                // Claude Row
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "Claude", style = TextStyle(color = COLOR_MUTED, fontSize = 9.sp))
+                    Spacer(modifier = GlanceModifier.defaultWeight())
+                    Text(
+                        text = "$cPct%",
+                        style = TextStyle(
+                            color = statusColor(cPct, config.claudeColorProvider),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                }
+                Spacer(modifier = GlanceModifier.height(2.dp))
+                LinearProgressIndicator(
+                    progress = cPct.coerceIn(0, 100) / 100f,
+                    modifier = GlanceModifier.fillMaxWidth().height(4.dp),
+                    color = statusColor(cPct, config.claudeColorProvider),
+                    backgroundColor = COLOR_TRACK_BG
+                )
+            }
+        }
+    }
 }
 
+/**
+ * Interactive callback when user taps the account chip on the widget.
+ * Cycles to the next saved account (or all-accounts mode) and refreshes the widget immediately!
+ */
+class CycleWidgetAccountCallback : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters
+    ) {
+        try {
+            val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
+            WidgetConfigManager.cycleAccount(context, appWidgetId)
+            AntigravityQuotaWidget().update(context, glanceId)
+        } catch (_: Exception) {}
+    }
+}
+
+/**
+ * Interactive callback when user taps the tactile refresh icon on the widget.
+ * Queries Google/Antigravity API endpoints in the background and re-renders the widget with fresh quotas.
+ */
 class RefreshWidgetCallback : ActionCallback {
     override suspend fun onAction(
         context: Context,
@@ -712,13 +1230,20 @@ class RefreshWidgetCallback : ActionCallback {
             val app = context.applicationContext as? CodexBarApp
             val container = app?.container
             if (container != null) {
-                val activeAccount = container.accountRepository.getActiveAccount()
-                val token = activeAccount?.token ?: container.secureStorage.getApiKey(UsageProvider.ANTIGRAVITY)
-                if (!token.isNullOrBlank()) {
-                    container.usageRepository.refreshUsage(
-                        UsageProvider.ANTIGRAVITY,
-                        ProviderCredentials(apiKey = token)
-                    )
+                val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
+                val config = WidgetConfigManager.getConfig(context, appWidgetId)
+                val targetAccounts = WidgetConfigManager.resolveTargetAccounts(context, config.targetAccountId)
+
+                for (account in targetAccounts) {
+                    val token = account.token.ifBlank {
+                        container.secureStorage.getApiKey(UsageProvider.ANTIGRAVITY) ?: ""
+                    }
+                    if (token.isNotBlank()) {
+                        container.usageRepository.refreshUsage(
+                            UsageProvider.ANTIGRAVITY,
+                            ProviderCredentials(apiKey = token)
+                        )
+                    }
                 }
             }
             AntigravityQuotaWidget().update(context, glanceId)

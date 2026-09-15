@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Neumorphic extruded card background (Dark Obsidian theme) -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Bottom-right soft shadow layer -->
+    <item
+        android:left="0dp"
+        android:top="0dp"
+        android:right="0dp"
+        android:bottom="0dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <solid android:color="#0D0E14" />
+        </shape>
+    </item>
+
+    <!-- Top-left subtle highlight stroke layer -->
+    <item
+        android:left="0dp"
+        android:top="0dp"
+        android:right="1.5dp"
+        android:bottom="1.5dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <stroke
+                android:width="1dp"
+                android:color="#2E3345" />
+            <solid android:color="#1A1C25" />
+        </shape>
+    </item>
+
+    <!-- Main convex surface with subtle gradient simulating directional light -->
+    <item
+        android:left="1dp"
+        android:top="1dp"
+        android:right="2dp"
+        android:bottom="2dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="19dp" />
+            <gradient
+                android:angle="135"
+                android:startColor="#20232E"
+                android:centerColor="#1B1D26"
+                android:endColor="#171821"
+                android:type="linear" />
+            <stroke
+                android:width="0.5dp"
+                android:color="#363C50" />
+        </shape>
+    </item>
+</layer-list>
