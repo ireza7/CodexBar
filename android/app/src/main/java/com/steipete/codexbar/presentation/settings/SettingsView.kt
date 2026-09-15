@@ -171,6 +171,29 @@ fun SettingsView(
             }
 
             item {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "CodexBar Android v1.0.3 (Build 3)",
+                            style = CodexBarTypography.labelSmall,
+                            color = CodexBarColors.TextSecondary
+                        )
+                        Text(
+                            text = "Multi-Account & Screenshot-Style Widget",
+                            style = CodexBarTypography.labelSmall,
+                            color = CodexBarColors.ProviderGemini
+                        )
+                    }
+                }
+            }
+
+            item {
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }

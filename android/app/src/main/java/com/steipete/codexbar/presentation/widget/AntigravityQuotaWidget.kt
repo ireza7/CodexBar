@@ -124,12 +124,13 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
 
         provideContent {
             val size = LocalSize.current
-            val isWide = size.width >= 200.dp
-            val isTall = size.height >= 75.dp
+            val isTall = size.height >= 60.dp
+            val isVeryWide = size.width >= 320.dp
 
             when {
-                // 2x2 Square layout - perfectly matches the user's uploaded screenshot
-                !isWide && isTall -> ScreenshotStyle2x2Layout(
+                // Tall widgets (2x2, 2x3, 3x2, 3x3, 4x2 phone):
+                // Directly renders the sleek layout matching the user's screenshot
+                isTall && !isVeryWide -> ScreenshotStyle2x2Layout(
                     accountLabel = accountLabel,
                     geminiName = "Gemini Pro",
                     geminiPct = g5hPct,
@@ -138,22 +139,8 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     claudePct = c5hPct,
                     claudeResetStr = cResetStr
                 )
-                // 4x1 Wide single-row layout
-                isWide && !isTall -> WideBarLayout(
-                    accountLabel = accountLabel,
-                    g5hPct = g5hPct,
-                    c5hPct = c5hPct,
-                    gResetStr = gResetStr,
-                    cResetStr = cResetStr
-                )
-                // 2x1 Compact mini layout
-                !isWide && !isTall -> CompactMiniLayout(
-                    accountLabel = accountLabel,
-                    g5hPct = g5hPct,
-                    c5hPct = c5hPct
-                )
-                // 4x2+ Expanded dashboard layout
-                else -> ExpandedDashboardLayout(
+                // Tall and very wide (tablet landscape):
+                isTall && isVeryWide -> ExpandedDashboardLayout(
                     accountLabel = accountLabel,
                     g5hPct = g5hPct,
                     gWPct = gWPct,
@@ -161,6 +148,20 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     cWPct = cWPct,
                     gResetStr = gResetStr,
                     cResetStr = cResetStr
+                )
+                // Short and wide (3x1 or 4x1 slim bar):
+                size.width >= 170.dp -> WideBarLayout(
+                    accountLabel = accountLabel,
+                    g5hPct = g5hPct,
+                    c5hPct = c5hPct,
+                    gResetStr = gResetStr,
+                    cResetStr = cResetStr
+                )
+                // Compact mini (2x1):
+                else -> CompactMiniLayout(
+                    accountLabel = accountLabel,
+                    g5hPct = g5hPct,
+                    c5hPct = c5hPct
                 )
             }
         }
@@ -521,7 +522,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .background(ImageProvider(R.drawable.widget_bg_raised))
+                .background(ImageProvider(R.drawable.widget_bg_card))
                 .clickable(actionStartActivity<MainActivity>())
                 .padding(12.dp)
         ) {
