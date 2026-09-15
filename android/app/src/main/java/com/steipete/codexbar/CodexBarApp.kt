@@ -27,10 +27,15 @@ class AppContainer(private val context: Context) {
         SettingsRepositoryImpl(context)
     }
 
+    val accountRepository: com.steipete.codexbar.domain.repository.AccountRepository by lazy {
+        com.steipete.codexbar.data.local.AccountRepositoryImpl(context, secureStorage)
+    }
+
     val usageRepository: UsageRepository by lazy {
         UsageRepositoryImpl(
             context = context,
-            fetchers = UsageRepositoryImpl.defaultFetchers(httpClient)
+            fetchers = UsageRepositoryImpl.defaultFetchers(httpClient),
+            accountRepository = accountRepository
         )
     }
 }

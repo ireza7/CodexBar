@@ -21,7 +21,8 @@ import okhttp3.OkHttpClient
 class UsageRepositoryImpl(
     private val context: android.content.Context? = null,
     private val fetchers: Map<UsageProvider, ProviderFetcher> = defaultFetchers(),
-    initialCache: Map<UsageProvider, UsageSnapshot> = emptyMap()
+    initialCache: Map<UsageProvider, UsageSnapshot> = emptyMap(),
+    private val accountRepository: com.steipete.codexbar.domain.repository.AccountRepository? = null
 ) : UsageRepository {
 
     private val cacheFlow = MutableStateFlow(initialCache)
@@ -92,6 +93,20 @@ class UsageRepositoryImpl(
                         .putLong("claude_weekly_reset", claudeWeeklyReset)
                         .putLong("last_updated_epoch", System.currentTimeMillis())
                         .apply()
+
+                    // Sync to AccountRepository for multi-account management
+                    try {
+                        accountRepository?.updateActiveAccountQuotas(
+                            gemini5hPct = gemini5hPct,
+                            geminiWeeklyPct = geminiWeeklyPct,
+                            claude5hPct = claude5hPct,
+                            claudeWeeklyPct = claudeWeeklyPct,
+                            geminiReset = gemini5hReset,
+                            claudeReset = claude5hReset,
+                            plan = resolved.accountInfo?.plan,
+                            email = resolved.accountInfo?.email
+                        )
+                    } catch (_: Exception) {}
 
                     // Request Glance widget to update immediately with fresh quota data
                     try {

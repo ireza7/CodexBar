@@ -18,6 +18,8 @@ data class DashboardUiState(
     val activeProviders: List<UsageProvider> = emptyList(),
     val selectedProvider: UsageProvider? = null,
     val usageSnapshots: Map<UsageProvider, UsageSnapshot> = emptyMap(),
+    val accounts: List<com.steipete.codexbar.domain.model.AntigravityAccount> = emptyList(),
+    val activeAccount: com.steipete.codexbar.domain.model.AntigravityAccount? = null,
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val globalError: String? = null

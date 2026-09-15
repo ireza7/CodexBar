@@ -63,8 +63,12 @@ fun DashboardScreen(
     onRefresh: () -> Unit,
     onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier,
-    onDismissError: (() -> Unit)? = null
+    onDismissError: (() -> Unit)? = null,
+    onSwitchAccount: ((String) -> Unit)? = null,
+    onAddAccount: ((String, String, String?) -> Unit)? = null
 ) {
+    var showAccountDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -169,6 +173,152 @@ fun DashboardScreen(
                         }
                     }
                 }
+            }
+
+            // Multi-Account Switcher Banner
+            if (uiState.accounts.isNotEmpty()) {
+                Surface(
+                    onClick = { showAccountDialog = true },
+                    shape = RoundedCornerShape(10.dp),
+                    color = CodexBarColors.SurfaceCard,
+                    border = BorderStroke(1.dp, CodexBarColors.CardBorder),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f, fill = false)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AccountCircle,
+                                contentDescription = null,
+                                tint = CodexBarColors.ProviderGemini,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Column {
+                                val activeLabel = uiState.activeAccount?.label ?: "Default Account"
+                                Text(
+                                    text = activeLabel,
+                                    style = CodexBarTypography.bodyMedium,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                    color = CodexBarColors.TextPrimary,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                                if (!uiState.activeAccount?.email.isNullOrBlank()) {
+                                    Text(
+                                        text = uiState.activeAccount!!.email!!,
+                                        style = CodexBarTypography.labelSmall,
+                                        color = CodexBarColors.TextSecondary,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (uiState.accounts.size > 1) {
+                                Text(
+                                    text = "${uiState.accounts.size} accounts",
+                                    style = CodexBarTypography.labelSmall,
+                                    color = CodexBarColors.ProviderGemini
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Switch Account",
+                                tint = CodexBarColors.TextSecondary
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (showAccountDialog) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showAccountDialog = false },
+                    title = {
+                        Text(text = "Switch Account", style = CodexBarTypography.headlineMedium)
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            uiState.accounts.forEach { acc ->
+                                val isCurrent = acc.id == uiState.activeAccount?.id
+                                Surface(
+                                    onClick = {
+                                        onSwitchAccount?.invoke(acc.id)
+                                        showAccountDialog = false
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isCurrent) CodexBarColors.ProviderGemini.copy(alpha = 0.15f) else CodexBarColors.SurfaceCardElevated,
+                                    border = if (isCurrent) BorderStroke(1.dp, CodexBarColors.ProviderGemini) else null,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = acc.label,
+                                                style = CodexBarTypography.bodyMedium,
+                                                fontWeight = if (isCurrent) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal,
+                                                color = CodexBarColors.TextPrimary
+                                            )
+                                            if (!acc.email.isNullOrBlank()) {
+                                                Text(
+                                                    text = acc.email,
+                                                    style = CodexBarTypography.labelSmall,
+                                                    color = CodexBarColors.TextSecondary
+                                                )
+                                            }
+                                        }
+                                        if (isCurrent) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Active",
+                                                tint = CodexBarColors.ProviderGemini,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                showAccountDialog = false
+                                onNavigateToSettings()
+                            }
+                        ) {
+                            Text(text = "Manage Accounts", color = CodexBarColors.ProviderGemini)
+                        }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(onClick = { showAccountDialog = false }) {
+                            Text(text = "Close", color = CodexBarColors.TextSecondary)
+                        }
+                    }
+                )
             }
 
             when {

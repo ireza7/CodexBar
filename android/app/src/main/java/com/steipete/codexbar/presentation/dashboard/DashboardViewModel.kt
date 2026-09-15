@@ -24,6 +24,7 @@ class DashboardViewModel(
     private val usageRepository: UsageRepository,
     private val settingsRepository: SettingsRepository,
     private val secureStorage: SecureStorage,
+    private val accountRepository: com.steipete.codexbar.domain.repository.AccountRepository? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -33,6 +34,22 @@ class DashboardViewModel(
     init {
         observeSettings()
         observeUsageSnapshots()
+        observeAccounts()
+    }
+
+    private fun observeAccounts() {
+        if (accountRepository == null) return
+        viewModelScope.launch {
+            accountRepository.getAccountsFlow().collect { accountsList ->
+                val active = accountsList.find { it.isActive } ?: accountsList.firstOrNull()
+                _uiState.update { current ->
+                    current.copy(
+                        accounts = accountsList,
+                        activeAccount = active
+                    )
+                }
+            }
+        }
     }
 
     /**
@@ -127,6 +144,41 @@ class DashboardViewModel(
     }
 
     /**
+     * Switches the active Antigravity account and triggers an immediate usage refresh.
+     */
+    fun switchAccount(accountId: String) {
+        viewModelScope.launch {
+            val switched = accountRepository?.switchActiveAccount(accountId) ?: false
+            if (switched) {
+                refreshSelected()
+            }
+        }
+    }
+
+    /**
+     * Adds a new Antigravity account, switches to it, and refreshes usage.
+     */
+    fun addAccount(label: String, token: String, email: String? = null) {
+        viewModelScope.launch {
+            val newAcc = accountRepository?.addAccount(label, token, email)
+            if (newAcc != null) {
+                accountRepository.switchActiveAccount(newAcc.id)
+                refreshSelected()
+            }
+        }
+    }
+
+    /**
+     * Deletes a saved account.
+     */
+    fun deleteAccount(accountId: String) {
+        viewModelScope.launch {
+            accountRepository?.deleteAccount(accountId)
+            refreshSelected()
+        }
+    }
+
+    /**
      * Clears any active top-level error message.
      */
     fun clearGlobalError() {
@@ -140,6 +192,7 @@ class DashboardViewModel(
         private val usageRepository: UsageRepository,
         private val settingsRepository: SettingsRepository,
         private val secureStorage: SecureStorage,
+        private val accountRepository: com.steipete.codexbar.domain.repository.AccountRepository? = null,
         private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
@@ -148,6 +201,7 @@ class DashboardViewModel(
                 usageRepository = usageRepository,
                 settingsRepository = settingsRepository,
                 secureStorage = secureStorage,
+                accountRepository = accountRepository,
                 ioDispatcher = ioDispatcher
             ) as T
         }

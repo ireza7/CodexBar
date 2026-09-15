@@ -9,12 +9,15 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.ImageProvider
 import androidx.glance.LocalSize
+import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.LinearProgressIndicator
 import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
@@ -31,41 +34,60 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import com.steipete.codexbar.CodexBarApp
 import com.steipete.codexbar.MainActivity
 import com.steipete.codexbar.R
+import com.steipete.codexbar.domain.model.ProviderCredentials
+import com.steipete.codexbar.domain.model.UsageProvider
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 class AntigravityQuotaWidget : GlanceAppWidget() {
 
     companion object {
         private val COMPACT_MINI = DpSize(110.dp, 40.dp)       // 2x1 slim
         private val WIDE_BAR = DpSize(210.dp, 40.dp)           // 4x1 wide
-        private val SQUARE_TILE = DpSize(120.dp, 100.dp)       // 2x2 tile
+        private val SQUARE_TILE = DpSize(120.dp, 100.dp)       // 2x2 square (Primary screenshot style)
         private val EXPANDED_DASHBOARD = DpSize(220.dp, 100.dp)// 4x2 full
 
-        private val SOFT_WHITE = ColorProvider(Color(0xFFE8E8ED))
-        private val DIM_LABEL = ColorProvider(Color(0xFF8E8E93))
+        private val SOFT_WHITE = ColorProvider(Color(0xFFEAEAEE))
+        private val DIM_LABEL = ColorProvider(Color(0xFF8F92A1))
         private val GEMINI_ACCENT = ColorProvider(Color(0xFF6EA8FE))
         private val CLAUDE_ACCENT = ColorProvider(Color(0xFFFF9F0A))
-        private val TRACK_BG = ColorProvider(Color(0xFF26272D))
+        private val TRACK_BG = ColorProvider(Color(0xFF1B1C24))
 
-        private fun statusColor(pct: Int): ColorProvider = when {
-            pct > 40 -> ColorProvider(Color(0xFF5ED87A))  // Healthy green
+        private fun statusColor(pct: Int, defaultTint: ColorProvider): ColorProvider = when {
+            pct > 40 -> defaultTint
             pct > 15 -> ColorProvider(Color(0xFFFFBF60))  // Warning amber
             else -> ColorProvider(Color(0xFFFF6B6B))       // Critical red
         }
 
-        private fun formatResetShort(epochMs: Long, now: Long = System.currentTimeMillis()): String? {
-            if (epochMs <= now) return null
-            val deltaMs = epochMs - now
-            val totalMinutes = deltaMs / 60_000L
-            val hours = totalMinutes / 60L
-            val minutes = totalMinutes % 60L
-            val days = hours / 24L
-            return when {
-                days > 0 -> "${days}d ${hours % 24L}h"
-                hours > 0 -> "${hours}h ${minutes}m"
-                totalMinutes > 0 -> "${totalMinutes}m"
-                else -> "<1m"
+        fun formatResetDate(epochMs: Long?, now: Long = System.currentTimeMillis()): String? {
+            if (epochMs == null || epochMs <= now) return null
+            return try {
+                val instant = Instant.ofEpochMilli(epochMs)
+                val zone = ZoneId.systemDefault()
+                val zonedDateTime = instant.atZone(zone)
+                val today = LocalDate.now(zone)
+                val resetDate = zonedDateTime.toLocalDate()
+                val timeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+                val formattedTime = zonedDateTime.format(timeFormatter)
+
+                when {
+                    resetDate.isEqual(today) -> "Resets Today $formattedTime"
+                    resetDate.isEqual(today.plusDays(1)) -> "Resets Tomorrow $formattedTime"
+                    else -> {
+                        val dayFormatter = DateTimeFormatter.ofPattern("EEE", Locale.US)
+                        val dayStr = zonedDateTime.format(dayFormatter)
+                        "Resets $dayStr $formattedTime"
+                    }
+                }
+            } catch (_: Exception) {
+                val deltaMin = (epochMs - now) / 60_000L
+                if (deltaMin > 60) "Resets in ${deltaMin / 60}h" else "Resets in ${deltaMin}m"
             }
         }
     }
@@ -77,6 +99,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val prefs = context.getSharedPreferences("antigravity_widget_cache", Context.MODE_PRIVATE)
 
+        val accountLabel = prefs.getString("active_account_label", null)
         val g5hPct = prefs.getInt(
             "gemini_5h_pct",
             prefs.getString("gemini_5h_text", "100")?.replace("%", "")?.toIntOrNull() ?: 100
@@ -96,8 +119,8 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
 
         val g5hReset = prefs.getLong("gemini_5h_reset", 0L)
         val c5hReset = prefs.getLong("claude_5h_reset", 0L)
-        val gResetStr = formatResetShort(g5hReset)
-        val cResetStr = formatResetShort(c5hReset)
+        val gResetStr = formatResetDate(g5hReset)
+        val cResetStr = formatResetDate(c5hReset)
 
         provideContent {
             val size = LocalSize.current
@@ -105,25 +128,222 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
             val isTall = size.height >= 75.dp
 
             when {
-                !isWide && !isTall -> CompactMiniLayout(g5hPct, c5hPct)
-                isWide && !isTall -> WideBarLayout(g5hPct, c5hPct, gResetStr, cResetStr)
-                !isWide && isTall -> CompactSquareLayout(g5hPct, gWPct, c5hPct, cWPct)
-                else -> ExpandedDashboardLayout(g5hPct, gWPct, c5hPct, cWPct, gResetStr, cResetStr)
+                // 2x2 Square layout - perfectly matches the user's uploaded screenshot
+                !isWide && isTall -> ScreenshotStyle2x2Layout(
+                    accountLabel = accountLabel,
+                    geminiName = "Gemini Pro",
+                    geminiPct = g5hPct,
+                    geminiResetStr = gResetStr,
+                    claudeName = "Claude",
+                    claudePct = c5hPct,
+                    claudeResetStr = cResetStr
+                )
+                // 4x1 Wide single-row layout
+                isWide && !isTall -> WideBarLayout(
+                    accountLabel = accountLabel,
+                    g5hPct = g5hPct,
+                    c5hPct = c5hPct,
+                    gResetStr = gResetStr,
+                    cResetStr = cResetStr
+                )
+                // 2x1 Compact mini layout
+                !isWide && !isTall -> CompactMiniLayout(
+                    accountLabel = accountLabel,
+                    g5hPct = g5hPct,
+                    c5hPct = c5hPct
+                )
+                // 4x2+ Expanded dashboard layout
+                else -> ExpandedDashboardLayout(
+                    accountLabel = accountLabel,
+                    g5hPct = g5hPct,
+                    gWPct = gWPct,
+                    c5hPct = c5hPct,
+                    cWPct = cWPct,
+                    gResetStr = gResetStr,
+                    cResetStr = cResetStr
+                )
+            }
+        }
+    }
+
+    /**
+     * Iconic 2x2 Widget Layout designed from the user's uploaded reference:
+     * - Frosted dark card with 22dp smooth corners
+     * - Stylized 'A' logo mark + "Antigravity" + optional active account indicator
+     * - Instant tap-to-refresh icon '🔄'
+     * - Rounded inset cards for Gemini and Claude
+     * - 6dp rounded progress bars emptying as quota is consumed
+     * - Human-friendly reset dates (e.g. "Resets Wed 9:00 AM", "Resets Fri 12:00 PM")
+     */
+    @androidx.compose.runtime.Composable
+    private fun ScreenshotStyle2x2Layout(
+        accountLabel: String?,
+        geminiName: String,
+        geminiPct: Int,
+        geminiResetStr: String?,
+        claudeName: String,
+        claudePct: Int,
+        claudeResetStr: String?
+    ) {
+        Box(
+            modifier = GlanceModifier
+                .fillMaxSize()
+                .background(ImageProvider(R.drawable.widget_bg_card))
+                .clickable(actionStartActivity<MainActivity>())
+                .padding(12.dp)
+        ) {
+            Column(
+                modifier = GlanceModifier.fillMaxSize(),
+                verticalAlignment = Alignment.SpaceBetween
+            ) {
+                // Header: Logo 'A', Title, Account badge, Refresh icon
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Λ",
+                        style = TextStyle(
+                            color = SOFT_WHITE,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Spacer(modifier = GlanceModifier.width(6.dp))
+                    Text(
+                        text = if (!accountLabel.isNullOrBlank()) "Antigravity · $accountLabel" else "Antigravity",
+                        style = TextStyle(
+                            color = SOFT_WHITE,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        modifier = GlanceModifier.defaultWeight()
+                    )
+                    // Refresh Button (triggers background update immediately)
+                    Text(
+                        text = "🔄",
+                        style = TextStyle(color = SOFT_WHITE, fontSize = 13.sp),
+                        modifier = GlanceModifier
+                            .clickable(actionRunCallback<RefreshWidgetCallback>())
+                            .padding(2.dp)
+                    )
+                }
+
+                Spacer(modifier = GlanceModifier.height(6.dp))
+
+                // Gemini Inset Card
+                Box(
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .background(ImageProvider(R.drawable.widget_card_inset))
+                        .padding(horizontal = 10.dp, vertical = 7.dp)
+                ) {
+                    Column(modifier = GlanceModifier.fillMaxWidth()) {
+                        Row(
+                            modifier = GlanceModifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = geminiName,
+                                style = TextStyle(
+                                    color = SOFT_WHITE,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                            Spacer(modifier = GlanceModifier.defaultWeight())
+                            Text(
+                                text = "$geminiPct%",
+                                style = TextStyle(
+                                    color = SOFT_WHITE,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+                        Spacer(modifier = GlanceModifier.height(5.dp))
+                        LinearProgressIndicator(
+                            progress = geminiPct.coerceIn(0, 100) / 100f,
+                            modifier = GlanceModifier.fillMaxWidth().height(6.dp),
+                            color = statusColor(geminiPct, GEMINI_ACCENT),
+                            backgroundColor = TRACK_BG
+                        )
+                        if (geminiResetStr != null) {
+                            Spacer(modifier = GlanceModifier.height(4.dp))
+                            Text(
+                                text = geminiResetStr,
+                                style = TextStyle(color = DIM_LABEL, fontSize = 9.sp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = GlanceModifier.height(6.dp))
+
+                // Claude Inset Card
+                Box(
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .background(ImageProvider(R.drawable.widget_card_inset))
+                        .padding(horizontal = 10.dp, vertical = 7.dp)
+                ) {
+                    Column(modifier = GlanceModifier.fillMaxWidth()) {
+                        Row(
+                            modifier = GlanceModifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = claudeName,
+                                style = TextStyle(
+                                    color = SOFT_WHITE,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                            Spacer(modifier = GlanceModifier.defaultWeight())
+                            Text(
+                                text = "$claudePct%",
+                                style = TextStyle(
+                                    color = SOFT_WHITE,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+                        Spacer(modifier = GlanceModifier.height(5.dp))
+                        LinearProgressIndicator(
+                            progress = claudePct.coerceIn(0, 100) / 100f,
+                            modifier = GlanceModifier.fillMaxWidth().height(6.dp),
+                            color = statusColor(claudePct, CLAUDE_ACCENT),
+                            backgroundColor = TRACK_BG
+                        )
+                        if (claudeResetStr != null) {
+                            Spacer(modifier = GlanceModifier.height(4.dp))
+                            Text(
+                                text = claudeResetStr,
+                                style = TextStyle(color = DIM_LABEL, fontSize = 9.sp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 
     @androidx.compose.runtime.Composable
-    private fun CompactMiniLayout(
+    private fun WideBarLayout(
+        accountLabel: String?,
         g5hPct: Int,
-        c5hPct: Int
+        c5hPct: Int,
+        gResetStr: String?,
+        cResetStr: String?
     ) {
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
                 .background(ImageProvider(R.drawable.widget_bg_compact))
                 .clickable(actionStartActivity<MainActivity>())
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Row(
@@ -140,25 +360,29 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Gemini",
-                            style = TextStyle(color = GEMINI_ACCENT, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            text = "Gemini Pro",
+                            style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         )
                         Spacer(modifier = GlanceModifier.defaultWeight())
                         Text(
                             text = "$g5hPct%",
-                            style = TextStyle(color = statusColor(g5hPct), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         )
                     }
-                    Spacer(modifier = GlanceModifier.height(3.dp))
+                    Spacer(modifier = GlanceModifier.height(4.dp))
                     LinearProgressIndicator(
                         progress = g5hPct.coerceIn(0, 100) / 100f,
-                        modifier = GlanceModifier.fillMaxWidth().height(3.dp),
-                        color = statusColor(g5hPct),
+                        modifier = GlanceModifier.fillMaxWidth().height(5.dp),
+                        color = statusColor(g5hPct, GEMINI_ACCENT),
                         backgroundColor = TRACK_BG
                     )
+                    if (gResetStr != null) {
+                        Spacer(modifier = GlanceModifier.height(2.dp))
+                        Text(text = gResetStr, style = TextStyle(color = DIM_LABEL, fontSize = 9.sp))
+                    }
                 }
 
-                Spacer(modifier = GlanceModifier.width(10.dp))
+                Spacer(modifier = GlanceModifier.width(14.dp))
 
                 // Claude Column
                 Column(
@@ -171,46 +395,60 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     ) {
                         Text(
                             text = "Claude",
-                            style = TextStyle(color = CLAUDE_ACCENT, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         )
                         Spacer(modifier = GlanceModifier.defaultWeight())
                         Text(
                             text = "$c5hPct%",
-                            style = TextStyle(color = statusColor(c5hPct), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         )
                     }
-                    Spacer(modifier = GlanceModifier.height(3.dp))
+                    Spacer(modifier = GlanceModifier.height(4.dp))
                     LinearProgressIndicator(
                         progress = c5hPct.coerceIn(0, 100) / 100f,
-                        modifier = GlanceModifier.fillMaxWidth().height(3.dp),
-                        color = statusColor(c5hPct),
+                        modifier = GlanceModifier.fillMaxWidth().height(5.dp),
+                        color = statusColor(c5hPct, CLAUDE_ACCENT),
                         backgroundColor = TRACK_BG
                     )
+                    if (cResetStr != null) {
+                        Spacer(modifier = GlanceModifier.height(2.dp))
+                        Text(text = cResetStr, style = TextStyle(color = DIM_LABEL, fontSize = 9.sp))
+                    }
                 }
+
+                Spacer(modifier = GlanceModifier.width(8.dp))
+
+                // Quick refresh icon
+                Text(
+                    text = "🔄",
+                    style = TextStyle(color = SOFT_WHITE, fontSize = 12.sp),
+                    modifier = GlanceModifier
+                        .clickable(actionRunCallback<RefreshWidgetCallback>())
+                        .padding(2.dp)
+                )
             }
         }
     }
 
     @androidx.compose.runtime.Composable
-    private fun WideBarLayout(
+    private fun CompactMiniLayout(
+        accountLabel: String?,
         g5hPct: Int,
-        c5hPct: Int,
-        gResetStr: String?,
-        cResetStr: String?
+        c5hPct: Int
     ) {
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
                 .background(ImageProvider(R.drawable.widget_bg_compact))
                 .clickable(actionStartActivity<MainActivity>())
-                .padding(horizontal = 14.dp, vertical = 8.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center
         ) {
             Row(
                 modifier = GlanceModifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Gemini Group
+                // Gemini Mini Column
                 Column(
                     modifier = GlanceModifier.defaultWeight(),
                     verticalAlignment = Alignment.CenterVertically
@@ -220,34 +458,27 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "✦ Gemini 5h",
-                            style = TextStyle(color = GEMINI_ACCENT, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            text = "Gemini",
+                            style = TextStyle(color = SOFT_WHITE, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         )
                         Spacer(modifier = GlanceModifier.defaultWeight())
                         Text(
                             text = "$g5hPct%",
-                            style = TextStyle(color = statusColor(g5hPct), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            style = TextStyle(color = SOFT_WHITE, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         )
-                        if (gResetStr != null) {
-                            Spacer(modifier = GlanceModifier.width(4.dp))
-                            Text(
-                                text = "($gResetStr)",
-                                style = TextStyle(color = DIM_LABEL, fontSize = 10.sp)
-                            )
-                        }
                     }
-                    Spacer(modifier = GlanceModifier.height(4.dp))
+                    Spacer(modifier = GlanceModifier.height(3.dp))
                     LinearProgressIndicator(
                         progress = g5hPct.coerceIn(0, 100) / 100f,
                         modifier = GlanceModifier.fillMaxWidth().height(4.dp),
-                        color = statusColor(g5hPct),
+                        color = statusColor(g5hPct, GEMINI_ACCENT),
                         backgroundColor = TRACK_BG
                     )
                 }
 
-                Spacer(modifier = GlanceModifier.width(16.dp))
+                Spacer(modifier = GlanceModifier.width(10.dp))
 
-                // Claude Group
+                // Claude Mini Column
                 Column(
                     modifier = GlanceModifier.defaultWeight(),
                     verticalAlignment = Alignment.CenterVertically
@@ -257,123 +488,30 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "✦ Claude 5h",
-                            style = TextStyle(color = CLAUDE_ACCENT, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            text = "Claude",
+                            style = TextStyle(color = SOFT_WHITE, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         )
                         Spacer(modifier = GlanceModifier.defaultWeight())
                         Text(
                             text = "$c5hPct%",
-                            style = TextStyle(color = statusColor(c5hPct), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            style = TextStyle(color = SOFT_WHITE, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         )
-                        if (cResetStr != null) {
-                            Spacer(modifier = GlanceModifier.width(4.dp))
-                            Text(
-                                text = "($cResetStr)",
-                                style = TextStyle(color = DIM_LABEL, fontSize = 10.sp)
-                            )
-                        }
                     }
-                    Spacer(modifier = GlanceModifier.height(4.dp))
+                    Spacer(modifier = GlanceModifier.height(3.dp))
                     LinearProgressIndicator(
                         progress = c5hPct.coerceIn(0, 100) / 100f,
                         modifier = GlanceModifier.fillMaxWidth().height(4.dp),
-                        color = statusColor(c5hPct),
+                        color = statusColor(c5hPct, CLAUDE_ACCENT),
                         backgroundColor = TRACK_BG
                     )
                 }
-            }
-        }
-    }
-
-    @androidx.compose.runtime.Composable
-    private fun CompactSquareLayout(
-        g5hPct: Int,
-        gWPct: Int,
-        c5hPct: Int,
-        cWPct: Int
-    ) {
-        Box(
-            modifier = GlanceModifier
-                .fillMaxSize()
-                .background(ImageProvider(R.drawable.widget_bg_card))
-                .clickable(actionStartActivity<MainActivity>())
-                .padding(10.dp)
-        ) {
-            Column(
-                modifier = GlanceModifier.fillMaxSize(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Header
-                Text(
-                    text = "⚡ Antigravity",
-                    style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                )
-
-                Spacer(modifier = GlanceModifier.height(6.dp))
-
-                // Gemini Row
-                Row(
-                    modifier = GlanceModifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Gemini",
-                        style = TextStyle(color = GEMINI_ACCENT, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    )
-                    Spacer(modifier = GlanceModifier.defaultWeight())
-                    Text(
-                        text = "5h: $g5hPct%",
-                        style = TextStyle(color = statusColor(g5hPct), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    )
-                    Spacer(modifier = GlanceModifier.width(4.dp))
-                    Text(
-                        text = "Wk: $gWPct%",
-                        style = TextStyle(color = statusColor(gWPct), fontSize = 9.sp)
-                    )
-                }
-                Spacer(modifier = GlanceModifier.height(2.dp))
-                LinearProgressIndicator(
-                    progress = g5hPct.coerceIn(0, 100) / 100f,
-                    modifier = GlanceModifier.fillMaxWidth().height(3.dp),
-                    color = statusColor(g5hPct),
-                    backgroundColor = TRACK_BG
-                )
-
-                Spacer(modifier = GlanceModifier.height(8.dp))
-
-                // Claude Row
-                Row(
-                    modifier = GlanceModifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Claude",
-                        style = TextStyle(color = CLAUDE_ACCENT, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    )
-                    Spacer(modifier = GlanceModifier.defaultWeight())
-                    Text(
-                        text = "5h: $c5hPct%",
-                        style = TextStyle(color = statusColor(c5hPct), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    )
-                    Spacer(modifier = GlanceModifier.width(4.dp))
-                    Text(
-                        text = "Wk: $cWPct%",
-                        style = TextStyle(color = statusColor(cWPct), fontSize = 9.sp)
-                    )
-                }
-                Spacer(modifier = GlanceModifier.height(2.dp))
-                LinearProgressIndicator(
-                    progress = c5hPct.coerceIn(0, 100) / 100f,
-                    modifier = GlanceModifier.fillMaxWidth().height(3.dp),
-                    color = statusColor(c5hPct),
-                    backgroundColor = TRACK_BG
-                )
             }
         }
     }
 
     @androidx.compose.runtime.Composable
     private fun ExpandedDashboardLayout(
+        accountLabel: String?,
         g5hPct: Int,
         gWPct: Int,
         c5hPct: Int,
@@ -398,7 +536,12 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "⚡ Antigravity Quota",
+                        text = "Λ",
+                        style = TextStyle(color = SOFT_WHITE, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = GlanceModifier.width(6.dp))
+                    Text(
+                        text = if (!accountLabel.isNullOrBlank()) "Antigravity · $accountLabel" else "Antigravity Quota",
                         style = TextStyle(
                             color = SOFT_WHITE,
                             fontSize = 13.sp,
@@ -407,8 +550,11 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     )
                     Spacer(modifier = GlanceModifier.defaultWeight())
                     Text(
-                        text = "Tap to Open ↗",
-                        style = TextStyle(color = DIM_LABEL, fontSize = 10.sp)
+                        text = "🔄",
+                        style = TextStyle(color = SOFT_WHITE, fontSize = 13.sp),
+                        modifier = GlanceModifier
+                            .clickable(actionRunCallback<RefreshWidgetCallback>())
+                            .padding(2.dp)
                     )
                 }
 
@@ -429,7 +575,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                         Column {
                             Text(
                                 text = "Gemini Models",
-                                style = TextStyle(color = GEMINI_ACCENT, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             )
                             Spacer(modifier = GlanceModifier.height(6.dp))
 
@@ -442,20 +588,20 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                                 Spacer(modifier = GlanceModifier.defaultWeight())
                                 Text(
                                     text = "$g5hPct% rem",
-                                    style = TextStyle(color = statusColor(g5hPct), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 )
                             }
-                            Spacer(modifier = GlanceModifier.height(3.dp))
+                            Spacer(modifier = GlanceModifier.height(4.dp))
                             LinearProgressIndicator(
                                 progress = g5hPct.coerceIn(0, 100) / 100f,
-                                modifier = GlanceModifier.fillMaxWidth().height(4.dp),
-                                color = statusColor(g5hPct),
+                                modifier = GlanceModifier.fillMaxWidth().height(5.dp),
+                                color = statusColor(g5hPct, GEMINI_ACCENT),
                                 backgroundColor = TRACK_BG
                             )
                             if (gResetStr != null) {
                                 Spacer(modifier = GlanceModifier.height(2.dp))
                                 Text(
-                                    text = "Resets in $gResetStr",
+                                    text = gResetStr,
                                     style = TextStyle(color = DIM_LABEL, fontSize = 9.sp)
                                 )
                             }
@@ -471,14 +617,14 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                                 Spacer(modifier = GlanceModifier.defaultWeight())
                                 Text(
                                     text = "$gWPct% rem",
-                                    style = TextStyle(color = statusColor(gWPct), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 )
                             }
-                            Spacer(modifier = GlanceModifier.height(3.dp))
+                            Spacer(modifier = GlanceModifier.height(4.dp))
                             LinearProgressIndicator(
                                 progress = gWPct.coerceIn(0, 100) / 100f,
-                                modifier = GlanceModifier.fillMaxWidth().height(4.dp),
-                                color = statusColor(gWPct),
+                                modifier = GlanceModifier.fillMaxWidth().height(5.dp),
+                                color = statusColor(gWPct, GEMINI_ACCENT),
                                 backgroundColor = TRACK_BG
                             )
                         }
@@ -496,7 +642,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                         Column {
                             Text(
                                 text = "Claude & GPT",
-                                style = TextStyle(color = CLAUDE_ACCENT, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             )
                             Spacer(modifier = GlanceModifier.height(6.dp))
 
@@ -509,20 +655,20 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                                 Spacer(modifier = GlanceModifier.defaultWeight())
                                 Text(
                                     text = "$c5hPct% rem",
-                                    style = TextStyle(color = statusColor(c5hPct), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 )
                             }
-                            Spacer(modifier = GlanceModifier.height(3.dp))
+                            Spacer(modifier = GlanceModifier.height(4.dp))
                             LinearProgressIndicator(
                                 progress = c5hPct.coerceIn(0, 100) / 100f,
-                                modifier = GlanceModifier.fillMaxWidth().height(4.dp),
-                                color = statusColor(c5hPct),
+                                modifier = GlanceModifier.fillMaxWidth().height(5.dp),
+                                color = statusColor(c5hPct, CLAUDE_ACCENT),
                                 backgroundColor = TRACK_BG
                             )
                             if (cResetStr != null) {
                                 Spacer(modifier = GlanceModifier.height(2.dp))
                                 Text(
-                                    text = "Resets in $cResetStr",
+                                    text = cResetStr,
                                     style = TextStyle(color = DIM_LABEL, fontSize = 9.sp)
                                 )
                             }
@@ -538,14 +684,14 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                                 Spacer(modifier = GlanceModifier.defaultWeight())
                                 Text(
                                     text = "$cWPct% rem",
-                                    style = TextStyle(color = statusColor(cWPct), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    style = TextStyle(color = SOFT_WHITE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 )
                             }
-                            Spacer(modifier = GlanceModifier.height(3.dp))
+                            Spacer(modifier = GlanceModifier.height(4.dp))
                             LinearProgressIndicator(
                                 progress = cWPct.coerceIn(0, 100) / 100f,
-                                modifier = GlanceModifier.fillMaxWidth().height(4.dp),
-                                color = statusColor(cWPct),
+                                modifier = GlanceModifier.fillMaxWidth().height(5.dp),
+                                color = statusColor(cWPct, CLAUDE_ACCENT),
                                 backgroundColor = TRACK_BG
                             )
                         }
@@ -553,6 +699,30 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                 }
             }
         }
+    }
+}
+
+class RefreshWidgetCallback : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters
+    ) {
+        try {
+            val app = context.applicationContext as? CodexBarApp
+            val container = app?.container
+            if (container != null) {
+                val activeAccount = container.accountRepository.getActiveAccount()
+                val token = activeAccount?.token ?: container.secureStorage.getApiKey(UsageProvider.ANTIGRAVITY)
+                if (!token.isNullOrBlank()) {
+                    container.usageRepository.refreshUsage(
+                        UsageProvider.ANTIGRAVITY,
+                        ProviderCredentials(apiKey = token)
+                    )
+                }
+            }
+            AntigravityQuotaWidget().update(context, glanceId)
+        } catch (_: Exception) {}
     }
 }
 

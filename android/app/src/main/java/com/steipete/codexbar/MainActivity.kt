@@ -53,7 +53,8 @@ fun CodexBarNavHost(
         factory = DashboardViewModel.Factory(
             usageRepository = container.usageRepository,
             settingsRepository = container.settingsRepository,
-            secureStorage = container.secureStorage
+            secureStorage = container.secureStorage,
+            accountRepository = container.accountRepository
         )
     )
 ) {
@@ -71,7 +72,9 @@ fun CodexBarNavHost(
                 onSelectProvider = dashboardViewModel::selectProvider,
                 onRefresh = dashboardViewModel::refreshSelected,
                 onNavigateToSettings = { currentScreen = AppScreen.SETTINGS },
-                onDismissError = dashboardViewModel::clearGlobalError
+                onDismissError = dashboardViewModel::clearGlobalError,
+                onSwitchAccount = dashboardViewModel::switchAccount,
+                onAddAccount = dashboardViewModel::addAccount
             )
         }
 
@@ -82,6 +85,7 @@ fun CodexBarNavHost(
             SettingsView(
                 settingsRepository = container.settingsRepository,
                 secureStorage = container.secureStorage,
+                accountRepository = container.accountRepository,
                 onNavigateBack = { currentScreen = AppScreen.DASHBOARD }
             )
         }

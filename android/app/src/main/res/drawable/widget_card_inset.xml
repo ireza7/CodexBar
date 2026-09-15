@@ -1,25 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Neumorphic inset/pressed card background (dark mode) -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Inner dark edge (top-left pressed shadow) -->
-    <item>
-        <shape android:shape="rectangle">
-            <solid android:color="#1A1B20"/>
-            <corners android:radius="14dp"/>
-        </shape>
-    </item>
-    <!-- Inner light edge (bottom-right highlight) -->
-    <item android:left="1dp" android:top="1dp">
-        <shape android:shape="rectangle">
-            <solid android:color="#383940"/>
-            <corners android:radius="14dp"/>
-        </shape>
-    </item>
-    <!-- Inset surface (darker than main card) -->
-    <item android:left="1dp" android:top="1dp" android:right="1dp" android:bottom="1dp">
-        <shape android:shape="rectangle">
-            <solid android:color="#222328"/>
-            <corners android:radius="13dp"/>
-        </shape>
-    </item>
-</layer-list>
+<!-- Inset card background for model groups (14dp radius) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#282A37"/>
+    <corners android:radius="14dp"/>
+    <stroke android:width="0.5dp" android:color="#36384A"/>
+</shape>
