@@ -193,8 +193,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                 .padding(12.dp)
         ) {
             Column(
-                modifier = GlanceModifier.fillMaxSize(),
-                verticalAlignment = Alignment.SpaceBetween
+                modifier = GlanceModifier.fillMaxSize()
             ) {
                 // Header: Logo 'A', Title, Account badge, Refresh icon
                 Row(
@@ -229,7 +228,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     )
                 }
 
-                Spacer(modifier = GlanceModifier.height(6.dp))
+                Spacer(modifier = GlanceModifier.defaultWeight())
 
                 // Gemini Inset Card
                 Box(

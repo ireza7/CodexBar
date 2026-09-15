@@ -22,6 +22,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -39,6 +42,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -197,7 +201,7 @@ fun DashboardScreen(
                             modifier = Modifier.weight(1f, fill = false)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.AccountCircle,
+                                imageVector = Icons.Filled.AccountCircle,
                                 contentDescription = null,
                                 tint = CodexBarColors.ProviderGemini,
                                 modifier = Modifier.size(22.dp)
@@ -236,7 +240,7 @@ fun DashboardScreen(
                                 )
                             }
                             Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
+                                imageVector = Icons.Filled.ArrowDropDown,
                                 contentDescription = "Switch Account",
                                 tint = CodexBarColors.TextSecondary
                             )
@@ -292,7 +296,7 @@ fun DashboardScreen(
                                         }
                                         if (isCurrent) {
                                             Icon(
-                                                imageVector = Icons.Default.Check,
+                                                imageVector = Icons.Filled.Check,
                                                 contentDescription = "Active",
                                                 tint = CodexBarColors.ProviderGemini,
                                                 modifier = Modifier.size(18.dp)
