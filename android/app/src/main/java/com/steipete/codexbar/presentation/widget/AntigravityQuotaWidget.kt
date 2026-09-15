@@ -152,11 +152,6 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
             WidgetTheme.CYBER -> R.drawable.widget_neumorph_bg_cyber
         }
 
-        val configIntent = Intent(context, AntigravityWidgetConfigureActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-        }
-
         provideContent {
             val size = LocalSize.current
             val isTall = size.height >= 85.dp
@@ -178,8 +173,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     geminiResetStr = geminiResetStr,
                     claudeResetStr = claudeResetStr,
                     lastSyncStr = lastSyncStr,
-                    bgDrawable = bgDrawable,
-                    configIntent = configIntent
+                    bgDrawable = bgDrawable
                 )
 
                 // Category 4: Tall Vertical (W < 230dp, H >= 165dp)
@@ -193,8 +187,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     geminiResetStr = geminiResetStr,
                     claudeResetStr = claudeResetStr,
                     lastSyncStr = lastSyncStr,
-                    bgDrawable = bgDrawable,
-                    configIntent = configIntent
+                    bgDrawable = bgDrawable
                 )
 
                 // Category 3: Balanced 2x2 Square Widget (W < 230dp, H 85dp..165dp)
@@ -208,8 +201,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     geminiResetStr = geminiResetStr,
                     claudeResetStr = claudeResetStr,
                     lastSyncStr = lastSyncStr,
-                    bgDrawable = bgDrawable,
-                    configIntent = configIntent
+                    bgDrawable = bgDrawable
                 )
 
                 // Category 2: Wide Slim Bar (W >= 170dp, H < 85dp)
@@ -219,8 +211,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     gemini5hPct = gemini5hPct,
                     claude5hPct = claude5hPct,
                     geminiResetStr = geminiResetStr,
-                    claudeResetStr = claudeResetStr,
-                    configIntent = configIntent
+                    claudeResetStr = claudeResetStr
                 )
 
                 // Category 1: Compact Mini / 1x1 (W < 170dp, H < 85dp)
@@ -228,8 +219,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     config = config,
                     account = primaryAccount,
                     gemini5hPct = gemini5hPct,
-                    claude5hPct = claude5hPct,
-                    configIntent = configIntent
+                    claude5hPct = claude5hPct
                 )
             }
         }
@@ -243,8 +233,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
         config: WidgetConfig,
         account: AntigravityAccount,
         gemini5hPct: Int,
-        claude5hPct: Int,
-        configIntent: Intent
+        claude5hPct: Int
     ) {
         Box(
             modifier = GlanceModifier
@@ -267,7 +256,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                         style = TextStyle(
                             color = config.geminiColorProvider,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Black
+                            fontWeight = FontWeight.Bold
                         )
                     )
                     Spacer(modifier = GlanceModifier.width(4.dp))
@@ -294,7 +283,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                         text = "⚙️",
                         style = TextStyle(color = COLOR_MUTED, fontSize = 9.sp),
                         modifier = GlanceModifier
-                            .clickable(actionStartActivity(configIntent))
+                            .clickable(actionStartActivity<AntigravityWidgetConfigureActivity>())
                             .padding(1.dp)
                     )
                 }
@@ -362,8 +351,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
         gemini5hPct: Int,
         claude5hPct: Int,
         geminiResetStr: String?,
-        claudeResetStr: String?,
-        configIntent: Intent
+        claudeResetStr: String?
     ) {
         Box(
             modifier = GlanceModifier
@@ -389,7 +377,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                         style = TextStyle(
                             color = config.geminiColorProvider,
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.Black
+                            fontWeight = FontWeight.Bold
                         )
                     )
                     Spacer(modifier = GlanceModifier.width(4.dp))
@@ -491,7 +479,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     text = "⚙️",
                     style = TextStyle(color = COLOR_WHITE, fontSize = 11.sp),
                     modifier = GlanceModifier
-                        .clickable(actionStartActivity(configIntent))
+                        .clickable(actionStartActivity<AntigravityWidgetConfigureActivity>())
                         .padding(2.dp)
                 )
             }
@@ -512,8 +500,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
         geminiResetStr: String?,
         claudeResetStr: String?,
         lastSyncStr: String,
-        bgDrawable: Int,
-        configIntent: Intent
+        bgDrawable: Int
     ) {
         val vertPadding = if (config.compactDensity) 8.dp else 10.dp
         val horizPadding = if (config.compactDensity) 9.dp else 11.dp
@@ -538,7 +525,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                         style = TextStyle(
                             color = config.geminiColorProvider,
                             fontSize = 15.sp,
-                            fontWeight = FontWeight.Black
+                            fontWeight = FontWeight.Bold
                         )
                     )
                     Spacer(modifier = GlanceModifier.width(5.dp))
@@ -589,7 +576,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     Box(
                         modifier = GlanceModifier
                             .background(ImageProvider(R.drawable.widget_neumorph_button))
-                            .clickable(actionStartActivity(configIntent))
+                            .clickable(actionStartActivity<AntigravityWidgetConfigureActivity>())
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -659,8 +646,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
         geminiResetStr: String?,
         claudeResetStr: String?,
         lastSyncStr: String,
-        bgDrawable: Int,
-        configIntent: Intent
+        bgDrawable: Int
     ) {
         Box(
             modifier = GlanceModifier
@@ -680,7 +666,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                         style = TextStyle(
                             color = config.geminiColorProvider,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Black
+                            fontWeight = FontWeight.Bold
                         ),
                         modifier = GlanceModifier.defaultWeight()
                     )
@@ -708,7 +694,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     Box(
                         modifier = GlanceModifier
                             .background(ImageProvider(R.drawable.widget_neumorph_button))
-                            .clickable(actionStartActivity(configIntent))
+                            .clickable(actionStartActivity<AntigravityWidgetConfigureActivity>())
                             .padding(horizontal = 4.dp, vertical = 2.dp)
                     ) {
                         Text(text = "⚙️", style = TextStyle(color = COLOR_WHITE, fontSize = 9.sp))
@@ -793,8 +779,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
         geminiResetStr: String?,
         claudeResetStr: String?,
         lastSyncStr: String,
-        bgDrawable: Int,
-        configIntent: Intent
+        bgDrawable: Int
     ) {
         Box(
             modifier = GlanceModifier
@@ -814,7 +799,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                         style = TextStyle(
                             color = config.geminiColorProvider,
                             fontSize = 16.sp,
-                            fontWeight = FontWeight.Black
+                            fontWeight = FontWeight.Bold
                         )
                     )
                     Spacer(modifier = GlanceModifier.width(6.dp))
@@ -855,7 +840,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                     Box(
                         modifier = GlanceModifier
                             .background(ImageProvider(R.drawable.widget_neumorph_button))
-                            .clickable(actionStartActivity(configIntent))
+                            .clickable(actionStartActivity<AntigravityWidgetConfigureActivity>())
                             .padding(horizontal = 5.dp, vertical = 3.dp)
                     ) {
                         Text(text = "⚙️", style = TextStyle(color = COLOR_WHITE, fontSize = 11.sp))
@@ -908,7 +893,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                                         style = TextStyle(
                                             color = statusColor(gemini5hPct, config.geminiColorProvider),
                                             fontSize = 11.sp,
-                                            fontWeight = FontWeight.Black
+                                            fontWeight = FontWeight.Bold
                                         )
                                     )
                                 }
@@ -973,7 +958,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                                         style = TextStyle(
                                             color = statusColor(claude5hPct, config.claudeColorProvider),
                                             fontSize = 11.sp,
-                                            fontWeight = FontWeight.Black
+                                            fontWeight = FontWeight.Bold
                                         )
                                     )
                                 }
@@ -1076,7 +1061,7 @@ class AntigravityQuotaWidget : GlanceAppWidget() {
                         style = TextStyle(
                             color = progressColor,
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Black
+                            fontWeight = FontWeight.Bold
                         )
                     )
                 }
