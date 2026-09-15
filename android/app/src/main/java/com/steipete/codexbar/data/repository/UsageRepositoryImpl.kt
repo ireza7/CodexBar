@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import androidx.glance.appwidget.updateAll
 import okhttp3.OkHttpClient
 
 class UsageRepositoryImpl(
